@@ -1,5 +1,10 @@
 # safe
-Safe &amp; Puzzles
+
+**Task 1**
+build safe
+
+**Task 2**
+create puzzle
 
 # group
 
