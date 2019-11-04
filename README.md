@@ -8,4 +8,4 @@ create puzzle.
 
 # group
 
-Markus Schwörer, Florian Bregle, Frank Mutter
+Markus Schwörer, Florian Bregler, Frank Mutter
