@@ -1,10 +1,10 @@
 # safe
 
 **Task 1**
-build safe
+build safe.
 
 **Task 2**
-create puzzle
+create puzzle.
 
 # group
 
