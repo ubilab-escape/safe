@@ -1,9 +1,10 @@
-#General Idea:
+## Team Safe and Puzzles
+# General Idea:
 After Entering the Lab Room the safe will be deactivated (prototype will be lighted dimmed light). The players first have to supply the safe with power by solving a puzzle (see section puzzle).
 This action will light up the safe and highlight the second puzzle. This puzzle will ultimately open the safe to give access to the prototype.
 Ideally we like to include the whole room for solving the puzzles. spenden
 
-#Safe building:
+## Safe building:
 	* Use the already build puzzle of the chair
 	* Build the safe ourselves:
 		* Use acrylic glass and a cnc mill
@@ -20,17 +21,17 @@ Ideally we like to include the whole room for solving the puzzles. spenden
 <p align="center">
 
 
-#Possible Puzzles:
+# Possible Puzzles:
 	##Puzzle to activate the safe:
 		* Wiring cable riddle 
 		* Switching levers in correct order
 		* Find the correct resistor to generate the correct voltage
 		
 
-	##Puzzle to open the safe:
+	## Puzzle to open the safe:
 		* Riddle with numpad input
 		* Reach score in a little video game
 		
-# group
+# Group
 
 Markus Schwörer, Florian Bregler, Frank Mutter
