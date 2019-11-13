@@ -36,7 +36,7 @@ Markus Schwörer, Florian Bregler, Frank Mutter
 
 ## Partlist
 
-**Art**|**Stückzahl**|**Preis/Stück ca.**|**Preis Gesamt**|**Link**|**Alternative**
+**part**|**count**|**price/part**|**price total**|**link**|**alternative link**
 :-----:|:-----:|:-----:|:-----:|:-----:|:-----:
 Keypad|1|5,8|5,8|https://octopart.com/3845-adafruit+industries-94636475?r=sp&s=QRIaZTRmSZu4F2mVarnONA|https://www.digikey.com/short/p0rvbm
 Lock|1|13,35|13,35|https://octopart.com/1512-adafruit+industries-51880349?r=sp&s=Jx9Gw6qzSH2-PR3HbMgn8w|https://www.digikey.de/short/p0fpnc
