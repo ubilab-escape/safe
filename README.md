@@ -17,7 +17,7 @@ Ideally we like to include the whole room for solving the puzzles. spenden
 
 * Replace the existent lock by electronic lock
 
-## Puzzles t activate Safe:
+## Puzzles:
 ### Puzzle to activate the safe: 
 * Switching levers in correct order
 * Find the correct resistor to generate the correct voltage
@@ -29,14 +29,13 @@ Ideally we like to include the whole room for solving the puzzles. spenden
 		
 
 ## toDO
-
--[] Implement Communication to Server
--[] Cut Hole in wooden Box to integrate peripherals
--[] Buy acrylic glass
--[] Implement NFC Reading
--[] Test Vibration Sensor
--[] Integrate Voltage Divider Riddle into power supply box
--[] Implement LED control
+- [ ] Implement Communication to Server
+- [ ] Cut Hole in wooden Box to integrate peripherals
+- [ ] Buy acrylic glass
+- [ ] Implement NFC Reading
+- [ ] Test Vibration Sensor
+- [ ] Integrate Voltage Divider Riddle into power supply box
+- [ ] Implement LED control
 
 ## Partlist
 
