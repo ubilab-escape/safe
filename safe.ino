@@ -26,16 +26,22 @@ char keys[ROWS][COLS] = {
   {'*', '0', '#'}
 };
 
-
-byte rowPins[ROWS] = {12, 0, 8, 10}; //connect to the row pinouts of the keypad
-byte colPins[COLS] = {11, 13, 9}; //connect to the column pinouts of the keypad
+// Arduino:
+//byte rowPins[ROWS] = {12, 0, 8, 10}; //connect to the row pinouts of the keypad
+//byte colPins[COLS] = {11, 13, 9}; //connect to the column pinouts of the keypad
+// ESP:
+byte rowPins[ROWS] = {12, 33, 25, 27}; //connect to the row pinouts of the keypad
+byte colPins[COLS] = {14, 13, 26}; //connect to the column pinouts of the keypad
 
 Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 
 
 // ----------------------------------------------------------------------------------------------
 // LCD:
-const int en = 7, rs = 2, d4 = 3, d5 = 4, d6 = 5, d7 = 6;
+// Arduino:
+//const int en = 7, rs = 2, d4 = 3, d5 = 4, d6 = 5, d7 = 6;
+// ESP:
+const int en = 15, rs = 2, d4 = 4, d5 = 5, d6 = 18, d7 = 19;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 // ----------------------------------------------------------------------------------------------
@@ -89,7 +95,6 @@ void reset() {
 }
 
 void key_pressed(char key) {
-  //Serial.println(key);
   if (safeStatus == noPower_state) {
     if (key == '#' or key == '*') {
       lock();
