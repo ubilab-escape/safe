@@ -1,19 +1,22 @@
 /* 
  * TODO:
- * check possible overflow problem;
- * check, if this code works with the ESP32;
  * implement connection with server status changes: noPower -> locked, unlocked -> locked??,
  * reset (go back to "noPower_state");
- * switch to I"C display;
+ * switch to I2C display;
  * implement other functionality (LEDs, vibration sensor, (speaker ??), lock, sensors from
  * the prototype group;
 */
 // the code for the keypad was taken from https://www.adafruit.com/product/3845 (25.11.19)
 // the code for the LCD was taken from https://starthardware.org/lcd/ (4.12.19)
+// the code for the I2C LCD was taken from https://funduino.de/nr-19-i%C2%B2c-display (15.12.19)
 
-//#include "Arduino.h"
-#include "Keypad.h"   // keypad library by Mark Stanley, ALexander Brevig
+#include "Keypad.h"              // keypad library by Mark Stanley, ALexander Brevig
 #include <LiquidCrystal.h>
+#include <LiquidCrystal_I2C.h>   // I2C library by Frank de Brabander
+
+#define USE_ESP32x
+#define CODE_LENGTH 4                    // <-------------------------- PASSWORD LENGTH
+#define USE_I2C_LCD
 
 // ----------------------------------------------------------------------------------------------
 // keypad:
@@ -26,31 +29,39 @@ char keys[ROWS][COLS] = {
   {'*', '0', '#'}
 };
 
-// Arduino:
-//byte rowPins[ROWS] = {12, 0, 8, 10}; //connect to the row pinouts of the keypad
-//byte colPins[COLS] = {11, 13, 9}; //connect to the column pinouts of the keypad
-// ESP:
-byte rowPins[ROWS] = {12, 33, 25, 27}; //connect to the row pinouts of the keypad
-byte colPins[COLS] = {14, 13, 26}; //connect to the column pinouts of the keypad
+#ifdef USE_ESP32
+  byte rowPins[ROWS] = {12, 33, 25, 27}; //connect to the row pinouts of the keypad
+  byte colPins[COLS] = {14, 13, 26}; //connect to the column pinouts of the keypad
+#else
+  byte rowPins[ROWS] = {12, 0, 8, 10}; //connect to the row pinouts of the keypad
+  byte colPins[COLS] = {11, 13, 9}; //connect to the column pinouts of the keypad
+#endif
+
 
 Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 
 
 // ----------------------------------------------------------------------------------------------
 // LCD:
-// Arduino:
-//const int en = 7, rs = 2, d4 = 3, d5 = 4, d6 = 5, d7 = 6;
-// ESP:
-const int en = 15, rs = 2, d4 = 4, d5 = 5, d6 = 18, d7 = 19;
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+#ifdef USE_I2C_LCD
+#  ifdef USE_ESP32
+     // ...
+#  else
+     LiquidCrystal_I2C lcd(0x27, 16, 2);
+#  endif
+#else
+#  ifdef USE_ESP32
+     const int en = 15, rs = 2, d4 = 4, d5 = 5, d6 = 18, d7 = 19;
+#  else
+     const int en = 7, rs = 2, d4 = 3, d5 = 4, d6 = 5, d7 = 6;
+#  endif
+   LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+#endif
 
 // ----------------------------------------------------------------------------------------------
-// LED:
-int LED = 0;
 // password:
-const int codeLength = 4;                    // <-------------------------- PASSWORD LENGTH
-int password[codeLength] = {4, 2, 4, 2};     // <-------------------------- PASSWORD 
-int currentTry[codeLength] = {};
+int password[CODE_LENGTH] = {4, 2, 4, 2};     // <-------------------------- PASSWORD 
+int currentTry[CODE_LENGTH] = {};
 // safeS status:
 enum safeStatusEnum {noPower_state, locked_state, wrongPassword_state, unlocked_state};
 enum safeStatusEnum safeStatus = noPower_state;
@@ -61,9 +72,12 @@ unsigned long startTime, currentTime;
 
 void setup() {
   Serial.begin(9600);
-  pinMode(LED, OUTPUT);
-  digitalWrite(LED, LOW);
-  lcd.begin(16, 2);
+  #ifdef USE_I2C_LCD
+    lcd.init();
+    lcd.backlight();
+  #else
+    lcd.begin(16, 2);
+  #endif
   initArray();
   printStatus();
   printPassword();
@@ -117,14 +131,14 @@ void append(char inpChar) {
   }
   int inp = inpChar - 48;    // char -> int
   int i = 0;
-  while (i < codeLength) {
+  while (i < CODE_LENGTH) {
     if (currentTry[i] == -1) {
       currentTry[i] = inp;
       break;
     }
     i++;
   }
-  if (i < codeLength - 1) {
+  if (i < CODE_LENGTH - 1) {
     // not enough numbers typed in
     printPassword();
     return;
@@ -149,13 +163,13 @@ void wrongPassword() {
 }
 
 void initArray () {
-  for (int i = 0; i < codeLength; i++) {
+  for (int i = 0; i < CODE_LENGTH; i++) {
     currentTry[i] = -1;
   }
 }
 
 void printPassword() {
-  for (int i = 0; i < codeLength; i++) {
+  for (int i = 0; i < CODE_LENGTH; i++) {
     lcd.setCursor(i, 1);
     if (safeStatus == noPower_state) {
       lcd.print(" ");
@@ -170,7 +184,7 @@ void printPassword() {
 }
 
 void checkPassword() {
-  for (int i = codeLength - 1; i >= 0; i--) {
+  for (int i = CODE_LENGTH - 1; i >= 0; i--) {
     if (currentTry[i] != password[i]) {
       // password not correct:
       wrongPassword();
