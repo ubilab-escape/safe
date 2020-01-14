@@ -522,8 +522,6 @@ void initPWM() {
   if (!accel.begin()) {
     /* There was a problem detecting the ADXL345 ... check your connections */
     Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
-    while (1)
-      ;
   }
   accel.setRange(LSM303_RANGE_2G);
   Serial.print("Range set to: ");
