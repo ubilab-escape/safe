@@ -24,13 +24,14 @@ StaticJsonDocument<300> mqtt_decoder;
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
-String createJson(String method_s, String state_s, String data_s){
+char* createJson(char* method_s, char* state_s, char* data_s){
   StaticJsonDocument<300> doc;
   doc["method"] = method_s;
   doc["state"] = state_s;
   doc["data"] = data_s;
-  String JSON_String = "";
+  static char JSON_String[300];
   serializeJson(doc, JSON_String);
+  Serial.println(JSON_String);
   return JSON_String;
 }
 
@@ -74,6 +75,8 @@ void setup() {
   Serial.begin(9600);
   Serial.println("Started");
   Serial.print(createJson("START", "DU", "PENNER"));
+  char f[6] = "hallo";
+  Serial.println(f);
   while(true);
   pixels.begin();
   pixels.clear();

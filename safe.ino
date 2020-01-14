@@ -55,9 +55,6 @@ long lastMsg = 0;
 char msg[50];
 int value = 0;
 
-// messages:
-char* puzzleSolved_message = "{\"method\": \"STATUS\", \"state\": \"solved\"}";
-
 // ----------------------------------------------------------------------------------------------
 // keypad:
 const byte ROWS = 4; //four rows
@@ -179,6 +176,15 @@ void setColor(int colorCode, int setMode){
   }
 }
 
+char* createJson(char* method_s, char* state_s, char* data_s){
+  StaticJsonDocument<300> doc;
+  doc["method"] = method_s;
+  doc["state"] = state_s;
+  doc["data"] = data_s;
+  static char JSON_String[300];
+  serializeJson(doc, JSON_String);
+  return JSON_String;
+}
 
 void setup() {
   Serial.begin(115200);
@@ -343,7 +349,7 @@ void action() {
       if (switchValue == 1) {
         safeStatus = unlocked_state;
         digitalWrite(LOCKPIN, LOW);
-        client.publish(thisTopicName, puzzleSolved_message);
+        client.publish(thisTopicName, createJson("STATUS", "solved", ""), true);
       }
       initArray();
     }
