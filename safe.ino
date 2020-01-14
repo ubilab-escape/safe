@@ -17,7 +17,7 @@
 // acceleration sensor: libraries needed: Adafruit 9DOF; Adafruit ADXL343; Adafruit AHRS; Adafruit BusIO;
 //                                        Adafruit Circuit Playground; Adafruit LSM303 Accel
 #include <Adafruit_LSM303_Accel.h>
-#include <Adafruit_Sensor.h>
+#include "Adafruit_Sensor.h"
 #include <Wire.h>
 #include <Adafruit_NeoPixel.h>  // library for LED stripe
 // libraries for ESP OTA update:
@@ -30,19 +30,20 @@
 
 #define USE_ESP32
 #define WLAN_enable true
-#define CODE_LENGTH 4                    // <-------------------------- safe code LENGTH
+#define SAFE_PW_LENGTH 4
 #define USE_I2C_LCD
 #define countdownStart 7
 #define NUMPIXELS      32
 #define MIN_BRIGHT_DEACT 30
 #define MAX_BRIGHT_DEACT 120
 #define MQTTport 1883
-#define thisTopicName "mqtt_5_safe_control"
-#define activateTopicName "mqtt_5_safe_activate"
+#define thisTopicName "5/safe/control"
+#define activateTopicName "5/safe/activate"
 
-const char* ssid = "Darknet";
-const char* wlan_password = "123456789";
-const char* MQTT_BROKER = "........";
+const char* ssid = "...";
+const char* wlan_password = "...";
+const char* MQTT_BROKER = "10.0.0.2";
+
 
 bool connectWLAN = WLAN_enable;
 
@@ -96,11 +97,12 @@ Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 #endif
 
 const int lockPin = 18;
+const int switchPin = 32;
 
 // ----------------------------------------------------------------------------------------------
 // safe code:
-int safePassword[CODE_LENGTH] = {4, 2, 4, 2};     // <-------------------------- safe code
-int currentTry[CODE_LENGTH] = {};
+int safePassword[SAFE_PW_LENGTH] = {4, 2, 4, 2};     // <-------------------------- safe code
+int currentTry[SAFE_PW_LENGTH] = {};
 // safe status:
 enum safeStatusEnum {start_state, connectingWLAN_state, noPower_state, locked_state, lockedAlarm_state, wrongSafePassword_state, openLock_state, unlocked_state};
 enum safeStatusEnum safeStatus = start_state;
@@ -125,9 +127,9 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, 2, NEO_GRB + NEO_KHZ800)
 void setup() {
   Serial.begin(115200);
   //Serial.begin(9600);
+  pinMode(switchPin, INPUT_PULLUP);
   pinMode(lockPin, OUTPUT);
   digitalWrite(lockPin, LOW);
-  pinMode(15, OUTPUT);
   safeStatus = start_state;
   printStatus();
   #ifdef USE_I2C_LCD
@@ -168,7 +170,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
 }
 
 long piezo_time = 0;
-bool piezo_started = 0;
 int count_num = 0;
 
 void loop() {
@@ -179,71 +180,70 @@ void loop() {
       client.subscribe(activateTopicName);
     }
   client.loop();
-  
-  if (safeStatus == wrongSafePassword_state) {
-    currentTime = millis();
-    if (currentTime - startTime >= messageLength) {
-      lock();
-    }
-    else if (currentTime < startTime) {
-      // TODO: is this necessary to prevent problems with overflow (restart with 0) ??
-      // just call function again:
-      wrongSafePassword();
-    }
-  }
-  else if(safeStatus == openLock_state) {
-    // TODO: check here if safe was opened:
-    char key = keypad.getKey();       // TODO: remove
-    if (key != NO_KEY) {
-      if (key == '*' or key == '#') {
-        safeStatus = unlocked_state;
-        client.publish(thisTopicName, puzzleSolved_message);
-      }
-    }
-    initArray();
-    printStatus();
-  }
-  else if (safeStatus == locked_state) {
-    char key = keypad.getKey();
-    if (key != NO_KEY) {
-      append(key);
-    }
-  }
-  else if (safeStatus == noPower_state) {
-    if (!WLAN_enable) {
-      char key = keypad.getKey();       // TODO: remove and implement MQTT here
-      if (key != NO_KEY) {
-        if (key == '#' or key == '*') {
-          lock();
-        }
-      }
-    }
-  }
-  if (safeStatus == unlocked_state) {  // TODO: remove if not needed anymore
-    char key = keypad.getKey();
-    if (key == '#' or key == '*') {
-      lock();
-    }
-  }
-  if (safeStatus == openLock_state) {
-    digitalWrite(lockPin, HIGH);
-  }
-  else {
-    digitalWrite(lockPin, LOW);
-  }
   if (connectWLAN) {
     if (WiFi.waitForConnectResult() != WL_CONNECTED) {    // TODO: better solution? problem: ESP loses the current state if the connection is lost!
       initOTA();
     }
     ArduinoOTA.handle();
   }
+  action();
+  printStatus();
   sensorEvent();
 }
 
-void reset() {
-  safeStatus = noPower_state;
-  initArray();
-  printStatus();
+void action() {
+  switch (safeStatus) {
+    case noPower_state:
+      if (!WLAN_enable) {
+        char key = keypad.getKey();       // TODO: remove and implement MQTT here
+        if (key != NO_KEY) {
+          if (key == '#' or key == '*') {
+            lock();
+          }
+        }
+      }
+      checkPiezo();
+    case lockedAlarm_state:
+      long time_diff = floor((millis() - piezo_time)/100)*100;
+      if(time_diff % 1000 == 0) {
+        ledcWriteTone(channel, freq);
+      } else if(time_diff % 500 == 0){
+        ledcWriteTone(channel, freq2);
+      }
+      if(time_diff > 3000){
+        ledcWrite(channel, 0);
+        safeStatus = locked_state;
+      }
+    case locked_state:
+      char key = keypad.getKey();
+      if (key != NO_KEY) {
+        append(key);
+      }
+    case wrongSafePassword_state:
+      currentTime = millis();
+      if (currentTime - startTime >= messageLength) {
+        lock();
+      }
+      else if (currentTime < startTime) {
+        // TODO: is this necessary to prevent problems with overflow (restart with 0) ??
+        // just call function again:
+        wrongSafePassword();
+      }
+    case openLock_state:
+      digitalWrite(lockPin, HIGH);
+      int switchValue = digitalRead(SWITCH_PIN);
+      if (switchValue == 1) {
+        safeStatus = unlocked_state;
+        digitalWrite(lockPin, LOW);
+        client.publish(thisTopicName, puzzleSolved_message);
+      }
+      initArray();
+    case unlocked_state:
+      int switchValue = digitalRead(SWITCH_PIN);
+      if (switchValue == 0) {
+        lock();
+      }
+  }
 }
 
 void append(char inpChar) {
@@ -253,14 +253,14 @@ void append(char inpChar) {
   }
   int inp = inpChar - 48;    // char -> int
   int i = 0;
-  while (i < CODE_LENGTH) {
+  while (i < SAFE_PW_LENGTH) {
     if (currentTry[i] == -1) {
       currentTry[i] = inp;
       break;
     }
     i++;
   }
-  if (i < CODE_LENGTH - 1) {
+  if (i < SAFE_PW_LENGTH - 1) {
     // not enough numbers typed in
     printSafePassword();
     return;
@@ -271,8 +271,8 @@ void append(char inpChar) {
 
 void lock() {
   // TODO: check, if safe is closed
-  safeStatus = locked_state;
   initArray();
+  safeStatus = locked_state;
   printStatus();
 }
 
@@ -284,13 +284,13 @@ void wrongSafePassword() {
 }
 
 void initArray () {
-  for (int i = 0; i < CODE_LENGTH; i++) {
+  for (int i = 0; i < SAFE_PW_LENGTH; i++) {
     currentTry[i] = -1;
   }
 }
 
 void checkSafePassword() {
-  for (int i = CODE_LENGTH - 1; i >= 0; i--) {
+  for (int i = SAFE_PW_LENGTH - 1; i >= 0; i--) {
     if (currentTry[i] != safePassword[i]) {
       // safe code not correct:
       wrongSafePassword();
@@ -350,16 +350,16 @@ void printStatus() {
       break;
     default:
       // print nothing:
-      for (int i = 0; i < CODE_LENGTH; i++) {
+      for (int i = 0; i < SAFE_PW_LENGTH; i++) {
         lcd.setCursor(i, 1);
         lcd.print(" ");
-    }
+      }
   }
 }
 
 void printSafePassword() {
   // print password:
-  for (int i = 0; i < CODE_LENGTH; i++) {
+  for (int i = 0; i < SAFE_PW_LENGTH; i++) {
     lcd.setCursor(i, 1);
     if (currentTry[i] == -1) {
       lcd.print("*");
@@ -388,7 +388,7 @@ void printCountdown() {
   }
   lcd.setCursor(0, 1);
   lcd.print(countdown, DEC);
-  for(int i = CODE_LENGTH; i > 0; i--) {
+  for(int i = SAFE_PW_LENGTH; i > 0; i--) {
     // clear the digits after the number (parts from the password or old digits from the countdown can still be there)
     lcd.print(" ");
   }
@@ -406,8 +406,6 @@ void initPWM() {
     while (1)
       ;
   }
-
-
   accel.setRange(LSM303_RANGE_2G);
   Serial.print("Range set to: ");
   lsm303_accel_range_t new_range = accel.getRange();
@@ -442,35 +440,18 @@ void initPWM() {
   }
 }
 
-void sensorEvent() {
+void checkPiezo() {
   /* Get a new sensor event */
   sensors_event_t event;
   accel.getEvent(&event);
   double vec = sqrt((event.acceleration.x)*(event.acceleration.x) + (event.acceleration.y)*(event.acceleration.y) + (event.acceleration.z)*(event.acceleration.z));
   Serial.println(vec);
-  //if(vec > 20){
   if((safeStatus == locked_state) and (vec > 20)){
-     // piezo_started = 1;
      safeStatus = lockedAlarm_state;
      printStatus();
      piezo_time = millis();
      ledcWrite(channel, 125);
      ledcWriteTone(channel, freq);
-  }
-  //if(piezo_started){
-  if(safeStatus == lockedAlarm_state){
-    long time_diff = floor((millis() - piezo_time)/100)*100;
-    if(time_diff % 1000 == 0) {
-      ledcWriteTone(channel, freq);
-    } else if(time_diff % 500 == 0){
-      ledcWriteTone(channel, freq2);
-    }
-    if(time_diff > 3000){
-      ledcWrite(channel, 0);
-      //piezo_started = 0;
-      safeStatus = locked_state;
-      printStatus();
-    }
   }
 }
 
@@ -507,6 +488,7 @@ void initOTA() {
   printStatus();
   Serial.println("Booting");
   WiFi.mode(WIFI_STA);
+//WiFi.config(10.0.5.1);
   WiFi.begin(ssid, wlan_password);
   int x = millis();
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -521,20 +503,6 @@ void initOTA() {
       ESP.restart();
     }
   }
-
-  // Port defaults to 3232
-  // ArduinoOTA.setPort(3232);
-
-  // Hostname defaults to esp3232-[MAC]
-  // ArduinoOTA.setHostname("myesp32");
-
-  // No authentication by default
-  // ArduinoOTA.setPassword("admin");
-
-  // Password can be set with it's md5 value as well
-  // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
-  // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
-
   ArduinoOTA
     .onStart([]() {
       String type;
