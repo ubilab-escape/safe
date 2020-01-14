@@ -27,6 +27,8 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <PubSubClient.h>     // library for MQTT
+#include <Adafruit_NeoPixel.h>
+#include <ArduinoJson.h>
 
 #define USE_ESP32
 #define WLAN_enable true
@@ -96,6 +98,25 @@ Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
    LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 #endif
 
+#define LED_COLOR_WHITE 0
+#define LED_COLOR_RED 1
+#define LED_COLOR_GREEN 2
+#define LED_COLOR_BLUE  3
+
+#define LED_MODE_ON 0
+#define LED_MODE_OFF 1
+#define LED_MODE_PULSE 2
+
+#define LED_PIN            2
+
+int led_mode = 0;
+uint32_t delay_led = 0;
+int led_brightness = 60;
+bool led_asc = 0;
+
+StaticJsonDocument<300> mqtt_decoder;
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
+
 const int lockPin = 18;
 const int switchPin = 32;
 
@@ -121,8 +142,43 @@ const int resolution = 8;
 // Assign a unique ID to this sensor at the same time
 Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(54321);
 
-// LED stripe:
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, 2, NEO_GRB + NEO_KHZ800);
+
+void setColor(int colorCode, int setMode){
+  uint32_t col = 0;
+  switch(colorCode){
+    case LED_COLOR_WHITE: // white
+      col = pixels.Color(255, 255, 255);
+    break;
+    case LED_COLOR_RED: // red
+      col = pixels.Color(255, 0, 0);
+    break;
+    case LED_COLOR_GREEN: // green
+      col = pixels.Color(0, 255, 0);
+    break;
+    case LED_COLOR_BLUE: // blue
+      col = pixels.Color(0, 0, 255);
+    break;
+  }
+  for(int i=0;i<NUMPIXELS;i++){
+    pixels.setPixelColor(i, col);
+    pixels.show(); // This sends the updated pixel color to the hardware.
+  }
+  led_mode = setMode;
+  switch(setMode){
+    case 0:
+      pixels.setBrightness(MAX_BRIGHT_DEACT);
+      pixels.show();
+    break;
+    case 1:
+      pixels.clear();
+    break;
+    case 2:
+      led_brightness = 60;
+      pixels.show();
+    break;
+  }
+}
+
 
 void setup() {
   Serial.begin(115200);
@@ -150,6 +206,10 @@ void setup() {
   countdown = countdownStart;
   initPWM();
   //initLEDstripe();
+  pixels.begin();
+  pixels.clear();
+  setColor(LED_COLOR_RED, LED_MODE_OFF);
+  delay(10);
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -165,8 +225,23 @@ void callback(char* topic, byte* payload, unsigned int length) {
  
     msg[length] = '\0';
     Serial.println(msg);
-    safeStatus = locked_state;
-    printStatus();
+
+    deserializeJson(mqtt_decoder, msg);
+    const char* method_msg = mqtt_decoder["method"];
+    const char* state_msg = mqtt_decoder["state"];
+    int data_msg = mqtt_decoder["data"];
+    if(method_msg == "TRIGGER" && state_msg == "on"){
+      //change led
+      int led_col = data_msg & 0x0F;
+      int led_st = (data_msg & 0xF0) >> 4;
+      setColor(led_col, led_st);
+    } 
+
+    if(topic == "5/safe/activate" && method_msg == "STATUS" && state_msg == "solved"){
+      safeStatus = locked_state;
+      printStatus();
+    } 
+    
 }
 
 long piezo_time = 0;
@@ -188,21 +263,42 @@ void loop() {
   }
   action();
   printStatus();
-  sensorEvent();
+  checkPiezo();
+
+  if(led_mode == LED_MODE_PULSE) {
+    if(millis() - delay_led > 200){
+      delay_led = millis();
+      if(led_asc){
+        led_brightness += 10;
+      }else {
+        led_brightness -= 10;
+      }
+      if(led_brightness > MAX_BRIGHT_DEACT){
+        led_asc = false;
+      } else if(led_brightness < MIN_BRIGHT_DEACT){
+        led_asc = true;
+      }
+      pixels.setBrightness(led_brightness);
+      pixels.show();
+      Serial.println("Brighntess set to ");
+      Serial.println(led_brightness);
+    }
+  }
 }
 
 void action() {
   switch (safeStatus) {
     case noPower_state:
       if (!WLAN_enable) {
-        char key = keypad.getKey();       // TODO: remove and implement MQTT here
-        if (key != NO_KEY) {
-          if (key == '#' or key == '*') {
+        char key2 = keypad.getKey();       // TODO: remove and implement MQTT here
+        if (key2 != NO_KEY) {
+          if (key2 == '#' or key2 == '*') {
             lock();
           }
         }
       }
       checkPiezo();
+    break;
     case lockedAlarm_state:
       long time_diff = floor((millis() - piezo_time)/100)*100;
       if(time_diff % 1000 == 0) {
@@ -214,11 +310,13 @@ void action() {
         ledcWrite(channel, 0);
         safeStatus = locked_state;
       }
+    break;
     case locked_state:
       char key = keypad.getKey();
       if (key != NO_KEY) {
         append(key);
       }
+    break;
     case wrongSafePassword_state:
       currentTime = millis();
       if (currentTime - startTime >= messageLength) {
@@ -229,6 +327,7 @@ void action() {
         // just call function again:
         wrongSafePassword();
       }
+    break;
     case openLock_state:
       digitalWrite(lockPin, HIGH);
       int switchValue = digitalRead(SWITCH_PIN);
@@ -238,11 +337,13 @@ void action() {
         client.publish(thisTopicName, puzzleSolved_message);
       }
       initArray();
+    break;
     case unlocked_state:
-      int switchValue = digitalRead(SWITCH_PIN);
-      if (switchValue == 0) {
+      int switchValue2 = digitalRead(SWITCH_PIN);
+      if (switchValue2 == 0) {
         lock();
       }
+    break;
   }
 }
 

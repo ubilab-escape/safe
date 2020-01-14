@@ -1,7 +1,7 @@
 #include <Adafruit_NeoPixel.h>
 #include <ArduinoJson.h>
 
-#define PIN            23
+#define LED_PIN            2
 #define NUMPIXELS      32
 #define MIN_BRIGHT_DEACT 30
 #define MAX_BRIGHT_DEACT 120
@@ -22,7 +22,7 @@ bool led_asc = 0;
 
 StaticJsonDocument<300> mqtt_decoder;
 
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 String createJson(String method_s, String state_s, String data_s){
   StaticJsonDocument<300> doc;
