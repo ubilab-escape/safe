@@ -107,6 +107,8 @@ Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 #define LED_MODE_OFF 1
 #define LED_MODE_PULSE 2
 
+#define SWITCH_PIN  32
+#define LOCKPIN 18
 #define LED_PIN            2
 
 int led_mode = 0;
@@ -117,8 +119,6 @@ bool led_asc = 0;
 StaticJsonDocument<300> mqtt_decoder;
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
-const int lockPin = 18;
-const int switchPin = 32;
 
 // ----------------------------------------------------------------------------------------------
 // safe code:
@@ -183,9 +183,9 @@ void setColor(int colorCode, int setMode){
 void setup() {
   Serial.begin(115200);
   //Serial.begin(9600);
-  pinMode(switchPin, INPUT_PULLUP);
-  pinMode(lockPin, OUTPUT);
-  digitalWrite(lockPin, LOW);
+  pinMode(SWITCH_PIN, INPUT_PULLUP);
+  pinMode(LOCKPIN, OUTPUT);
+  digitalWrite(LOCKPIN, LOW);
   safeStatus = start_state;
   printStatus();
   #ifdef USE_I2C_LCD
@@ -289,6 +289,7 @@ void loop() {
 void action() {
   switch (safeStatus) {
     case noPower_state:
+    {
       if (!WLAN_enable) {
         char key2 = keypad.getKey();       // TODO: remove and implement MQTT here
         if (key2 != NO_KEY) {
@@ -298,8 +299,10 @@ void action() {
         }
       }
       checkPiezo();
+    }
     break;
     case lockedAlarm_state:
+    {
       long time_diff = floor((millis() - piezo_time)/100)*100;
       if(time_diff % 1000 == 0) {
         ledcWriteTone(channel, freq);
@@ -310,14 +313,18 @@ void action() {
         ledcWrite(channel, 0);
         safeStatus = locked_state;
       }
+    }
     break;
-    case locked_state:
+    {
+      case locked_state:
       char key = keypad.getKey();
       if (key != NO_KEY) {
         append(key);
       }
+    }
     break;
     case wrongSafePassword_state:
+    {
       currentTime = millis();
       if (currentTime - startTime >= messageLength) {
         lock();
@@ -327,22 +334,27 @@ void action() {
         // just call function again:
         wrongSafePassword();
       }
+    }
     break;
     case openLock_state:
-      digitalWrite(lockPin, HIGH);
+    {
+      digitalWrite(LOCKPIN, HIGH);
       int switchValue = digitalRead(SWITCH_PIN);
       if (switchValue == 1) {
         safeStatus = unlocked_state;
-        digitalWrite(lockPin, LOW);
+        digitalWrite(LOCKPIN, LOW);
         client.publish(thisTopicName, puzzleSolved_message);
       }
       initArray();
+    }
     break;
     case unlocked_state:
+    {
       int switchValue2 = digitalRead(SWITCH_PIN);
       if (switchValue2 == 0) {
         lock();
       }
+    }
     break;
   }
 }
