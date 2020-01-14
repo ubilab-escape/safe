@@ -1,4 +1,5 @@
 #include <Adafruit_NeoPixel.h>
+#include <ArduinoJson.h>
 
 #define PIN            23
 #define NUMPIXELS      32
@@ -19,7 +20,19 @@ uint32_t delay_led = 0;
 int led_brightness = 60;
 bool led_asc = 0;
 
+StaticJsonDocument<300> mqtt_decoder;
+
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+
+String createJson(String method_s, String state_s, String data_s){
+  StaticJsonDocument<300> doc;
+  doc["method"] = method_s;
+  doc["state"] = state_s;
+  doc["data"] = data_s;
+  String JSON_String = "";
+  serializeJson(doc, JSON_String);
+  return JSON_String;
+}
 
 void setColor(int colorCode, int setMode){
   uint32_t col = 0;
@@ -60,6 +73,8 @@ void setColor(int colorCode, int setMode){
 void setup() {
   Serial.begin(9600);
   Serial.println("Started");
+  Serial.print(createJson("START", "DU", "PENNER"));
+  while(true);
   pixels.begin();
   pixels.clear();
   setColor(LED_COLOR_RED, LED_MODE_ON);
@@ -101,17 +116,16 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.println();
  
     msg[length] = '\0';
-    Serial.println(msg);
-    if(topic == "5/safe/safe_activate"){
-      // the only messege send by this topic is the Solved one
-      safeStatus = locked_state;
-      printStatus();
-    }
-    if(topic == "5/safe/safe_control"){
-      if(strstr("TRIGGER", msg)){
-        // todo: decode json message and call setColor method
-        
-      }
+    
+    deserializeJson(mqtt_decoder, msg);
+    const char* method_msg = mqtt_decoder["method"];
+    const char* state_msg = mqtt_decoder["state"];
+    int data_msg = mqtt_decoder["data"];
+    if(method_msg == "TRIGGER" && state_msg == "on"){
+      //change led
+      int led_col = data_msg & 0x0F;
+      int led_st = (data_msg & 0xF0) >> 4;
+      setColor(led_col, led_st);
     }
     
 }
