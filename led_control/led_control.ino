@@ -31,7 +31,6 @@ char* createJson(char* method_s, char* state_s, char* data_s){
   doc["data"] = data_s;
   static char JSON_String[300];
   serializeJson(doc, JSON_String);
-  Serial.println(JSON_String);
   return JSON_String;
 }
 

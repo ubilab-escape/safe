@@ -107,6 +107,7 @@ Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 #define SWITCH_PIN  32
 #define LOCKPIN 18
 #define LED_PIN            2
+#define BUZZER_PIN  4
 
 int led_mode = 0;
 uint32_t delay_led = 0;
@@ -231,19 +232,25 @@ void callback(char* topic, byte* payload, unsigned int length) {
  
     msg[length] = '\0';
     Serial.println(msg);
-
+    
     deserializeJson(mqtt_decoder, msg);
     const char* method_msg = mqtt_decoder["method"];
     const char* state_msg = mqtt_decoder["state"];
     int data_msg = mqtt_decoder["data"];
-    if(method_msg == "TRIGGER" && state_msg == "on"){
+    Serial.println(method_msg);
+    Serial.println(state_msg);
+    Serial.println(strcmp(method_msg, "TRIGGER") == 0);
+    Serial.println(strcmp(state_msg, "on") == 0);
+    if(strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "on") == 0){
       //change led
       int led_col = data_msg & 0x0F;
       int led_st = (data_msg & 0xF0) >> 4;
       setColor(led_col, led_st);
+      Serial.println("led");
+      Serial.println(data_msg);
     } 
 
-    if(topic == "5/safe/activate" && method_msg == "STATUS" && state_msg == "solved"){
+    if(strcmp(topic, "5/safe/activate") == 0 && strcmp(method_msg, "STATUS") == 0 && strcmp(state_msg, "solved") == 0){
       safeStatus = locked_state;
       printStatus();
     } 
@@ -516,7 +523,7 @@ void printCountdown() {
 void initPWM() {
   // init pwm
   ledcSetup(channel, freq, resolution);
-  ledcAttachPin(4, channel);
+  ledcAttachPin(BUZZER_PIN, channel);
   ledcWrite(channel, 0);
   /* Initialise the sensor */
   if (!accel.begin()) {
@@ -562,7 +569,7 @@ void checkPiezo() {
   sensors_event_t event;
   accel.getEvent(&event);
   double vec = sqrt((event.acceleration.x)*(event.acceleration.x) + (event.acceleration.y)*(event.acceleration.y) + (event.acceleration.z)*(event.acceleration.z));
-  Serial.println(vec);
+  // Serial.println(vec);
   if((safeStatus == locked_state) and (vec > 20)){
      safeStatus = lockedAlarm_state;
      printStatus();
