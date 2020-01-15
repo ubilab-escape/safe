@@ -261,6 +261,9 @@ long piezo_time = 0;
 int count_num = 0;
 
 void loop() {
+  //if (safe_status != openLock_state) {    // just to be sure
+  //  digitalWrite(LOCKPIN, LOW);
+  //}
   esp_wifi_set_ps(WIFI_PS_NONE);          // TODO: only every 10s or so ...
   while (!client.connected()){
       Serial.println("no connection");
@@ -506,6 +509,7 @@ void printCountdown() {
   }
   countdown = trunc(startTime/1000 + countdownStart - currentTime/1000);
   if (countdown <= 0) {
+    digitalWrite(LOCKPIN, LOW);
     safeStatus = locked_state;
     initArray();
     printStatus();
