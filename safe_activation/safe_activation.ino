@@ -4,8 +4,8 @@
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
-const char* ssid = "ubilab_wifi";
-const char* password = "ohg4xah3oufohreiPe7e";
+const char* ssid = "....";
+const char* password = "....";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -26,8 +26,8 @@ char* puzzleSolved_message = "{\"method\": \"STATUS\", \"state\": \"solved\"}";
 #define LED_S_SOLVED 32
 #define LED_V_SOLVED 23
 #define MEASUREMENT_PIN A0
-#define LOWER_THRESHOLD 500
-#define HIGHER_THRESHOLD 800
+#define LOWER_THRESHOLD 150
+#define HIGHER_THRESHOLD 250
 unsigned char switch_status = 0;
 unsigned char voltage_status = 0;
 unsigned char puzzle_solved = 0;
@@ -61,7 +61,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(S8), check_switches, CHANGE);
   
   pinMode(LED_S_SOLVED,OUTPUT); digitalWrite(LED_S_SOLVED,LOW);
-  pinMode(LED_V_SOLVED,OUTPUT); digitalWrite(LED_V_SOLVED,LOW);
+  pinMode(LED_V_SOLVED,OUTPUT); digitalWrite(LED_V_SOLVED, LOW);
   Serial.begin(9600);
   setup_wifi();
   client.setServer(mqtt_server, 1883);
@@ -77,8 +77,7 @@ void loop() {
       //client.subscribe("5_safe_activate");
     }
   voltage_status = check_voltage();
-  //delay(100);
-  // Publish solved Message once if both parts are solved 
+    // Publish solved Message once if both parts are solved 
   if(!puzzle_solved){
     if(voltage_status  && switch_status){
       Serial.println("Both puzzles solved");
@@ -89,7 +88,7 @@ void loop() {
       puzzle_solved = 0;
     }
   }
-  //delay(100);
+  delay(500);
 }
 
 
@@ -117,7 +116,7 @@ void setup_wifi() {
 // returns one when sensing the correct voltage
 unsigned int check_voltage(){
   adc_val = analogRead(A0);
-  //Serial.print("ADC VAL: "); Serial.println(adc_val);
+  Serial.print("ADC VAL: "); Serial.println(adc_val);
   
   // Turn on led and return 1 if measured voltage is between Thresholds
   if((adc_val < HIGHER_THRESHOLD) && (adc_val > LOWER_THRESHOLD)){
@@ -143,7 +142,8 @@ void check_switches(){
   Serial.print("S6: "); s6_val = digitalRead(S6); Serial.println(s6_val);
   Serial.print("S7: "); s7_val = digitalRead(S7); Serial.println(s7_val);
   Serial.print("S8: "); s8_val = digitalRead(S8); Serial.println(s8_val);
-  if(!s2_val && !s3_val && !s6_val && !s8_val && s1_val && s4_val && s5_val && s7_val){
+  //if(!s2_val && !s3_val && !s6_val && !s8_val && s1_val && s4_val && s5_val && s7_val){
+  if(!s2_val && !s3_val && !s8_val && s1_val && s4_val && s5_val && s7_val){
     Serial.println("Puzzle Switches Solved");
     switch_status = 1;
     digitalWrite(LED_S_SOLVED,HIGH);
