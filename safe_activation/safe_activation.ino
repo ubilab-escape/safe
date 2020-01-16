@@ -4,14 +4,14 @@
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
-const char* ssid = "Darknet";
-const char* password = "2556732986301168";
+const char* ssid = "ubilab_wifi";
+const char* password = "ohg4xah3oufohreiPe7e";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 // Add your MQTT Broker IP address, example:
-const char* mqtt_server = "192.168.178.21";
+const char* mqtt_server = "10.0.0.2";
 
 char* puzzleSolved_message = "{\"method\": \"STATUS\", \"state\": \"solved\"}";
 
@@ -23,7 +23,8 @@ char* puzzleSolved_message = "{\"method\": \"STATUS\", \"state\": \"solved\"}";
 #define S6 14
 #define S7 13
 #define S8 12
-#define LED_S 32
+#define LED_S_SOLVED 32
+#define LED_V_SOLVED 23
 #define MEASUREMENT_PIN A0
 #define LOWER_THRESHOLD 500
 #define HIGHER_THRESHOLD 800
@@ -49,6 +50,7 @@ void setup() {
   pinMode(S6,INPUT_PULLUP);
   pinMode(S7,INPUT_PULLUP);
   pinMode(S8,INPUT_PULLUP);
+  // Register all Interrupts for the callback function
   attachInterrupt(digitalPinToInterrupt(S1), check_switches, CHANGE);
   attachInterrupt(digitalPinToInterrupt(S2), check_switches, CHANGE);
   attachInterrupt(digitalPinToInterrupt(S3), check_switches, CHANGE);
@@ -58,12 +60,11 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(S7), check_switches, CHANGE);
   attachInterrupt(digitalPinToInterrupt(S8), check_switches, CHANGE);
   
-  pinMode(LED_S,OUTPUT);
-  digitalWrite(LED_S,LOW);
+  pinMode(LED_S_SOLVED,OUTPUT); digitalWrite(LED_S_SOLVED,LOW);
+  pinMode(LED_V_SOLVED,OUTPUT); digitalWrite(LED_V_SOLVED,LOW);
   Serial.begin(9600);
-  
   setup_wifi();
-  client.setServer(mqtt_server, 1884);
+  client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
 }
 
@@ -75,19 +76,20 @@ void loop() {
       client.connect("SafeActivation");
       //client.subscribe("5_safe_activate");
     }
-  
-    Serial.println("connected");
-
   voltage_status = check_voltage();
-  if(voltage_status  && switch_status){
-    Serial.println("Both puzzles solved");
-    client.publish("mqtt_5_safe_activate", puzzleSolved_message);
-    puzzle_solved = 1;
+  //delay(100);
+  // Publish solved Message once if both parts are solved 
+  if(!puzzle_solved){
+    if(voltage_status  && switch_status){
+      Serial.println("Both puzzles solved");
+      client.publish("5/safe/activate", puzzleSolved_message, true);
+      puzzle_solved = 1;
+    }
+    else{
+      puzzle_solved = 0;
+    }
   }
-  else{
-    puzzle_solved = 0;
-  }
-  delay(100);
+  //delay(100);
 }
 
 
@@ -112,14 +114,19 @@ void setup_wifi() {
   Serial.println(WiFi.localIP());
 }
 
+// returns one when sensing the correct voltage
 unsigned int check_voltage(){
   adc_val = analogRead(A0);
-  Serial.print("ADC VAL: "); Serial.println(adc_val);
+  //Serial.print("ADC VAL: "); Serial.println(adc_val);
+  
+  // Turn on led and return 1 if measured voltage is between Thresholds
   if((adc_val < HIGHER_THRESHOLD) && (adc_val > LOWER_THRESHOLD)){
     Serial.println("Puzzle Voltage Solved");
+    digitalWrite(LED_V_SOLVED,HIGH);
     return 1;
   }
   else{
+    digitalWrite(LED_V_SOLVED,LOW);
     return 0;
   }
 }
@@ -127,6 +134,7 @@ unsigned int check_voltage(){
 
 // Callback by switch change
 void check_switches(){
+  // Only for Debugging
   Serial.print("S1: "); s1_val = digitalRead(S1); Serial.println(s1_val);
   Serial.print("S2: "); s2_val = digitalRead(S2); Serial.println(s2_val);
   Serial.print("S3: "); s3_val = digitalRead(S3); Serial.println(s3_val);
@@ -138,11 +146,11 @@ void check_switches(){
   if(!s2_val && !s3_val && !s6_val && !s8_val && s1_val && s4_val && s5_val && s7_val){
     Serial.println("Puzzle Switches Solved");
     switch_status = 1;
-    digitalWrite(LED_S,HIGH);
+    digitalWrite(LED_S_SOLVED,HIGH);
   }
   else{
     switch_status = 0;
-    digitalWrite(LED_S,LOW);
+    digitalWrite(LED_S_SOLVED,LOW);
   }
   delay(200);
 } 
