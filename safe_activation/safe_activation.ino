@@ -60,8 +60,8 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(S7), check_switches, CHANGE);
   attachInterrupt(digitalPinToInterrupt(S8), check_switches, CHANGE);
   
-  pinMode(LED_S_SOLVED,OUTPUT); digitalWrite(LED_S_SOLVED,LOW);
-  pinMode(LED_V_SOLVED,OUTPUT); digitalWrite(LED_V_SOLVED, LOW);
+  pinMode(LED_S_SOLVED,OUTPUT); digitalWrite(LED_S_SOLVED,HIGH);
+  pinMode(LED_V_SOLVED,OUTPUT); digitalWrite(LED_V_SOLVED, HIGH);
   Serial.begin(9600);
   setup_wifi();
   client.setServer(mqtt_server, 1883);
@@ -106,7 +106,8 @@ void setup_wifi() {
     delay(500);
     Serial.print(".");
   }
-
+  digitalWrite(LED_S_SOLVED,LOW);
+  digitalWrite(LED_V_SOLVED, LOW);
   Serial.println("");
   Serial.println("WiFi connected");
   Serial.print("IP address: ");
