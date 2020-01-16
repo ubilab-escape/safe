@@ -4,8 +4,8 @@
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
-const char* ssid = "....";
-const char* password = "....";
+const char* ssid = "...";
+const char* password = "...";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
