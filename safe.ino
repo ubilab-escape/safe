@@ -46,7 +46,8 @@ const char* ssid = "...";
 const char* wlan_password = "...";
 const char* MQTT_BROKER = "10.0.0.2";
 
-
+long piezo_time = 0;
+int count_num = 0;
 bool connectWLAN = WLAN_enable;
 
 WiFiClient espClient;
@@ -104,7 +105,7 @@ Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 #define LED_MODE_ON 0
 #define LED_MODE_OFF 1
 #define LED_MODE_PULSE 2
-#define LED_MODE_BLINK
+#define LED_MODE_BLINK 3
 
 #define SWITCH_PIN  32
 #define LOCKPIN 18
@@ -115,6 +116,7 @@ int led_mode = 0;
 uint32_t delay_led = 0;
 int led_brightness = 60;
 bool led_asc = 0;
+uint8_t piezo_time_mqtt = 3;
 
 StaticJsonDocument<300> mqtt_decoder;
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
@@ -177,10 +179,9 @@ void setColor(int colorCode, int setMode){
     break;
     case 2:
       led_brightness = 60;
-      pixels.show();
       delay_led = 0;
     break;
-    case LED_MODE_BLINK:
+    case 3:
       pixels.setBrightness(MAX_BRIGHT_DEACT);
       pixels.show();
       delay_led = 0;
@@ -190,15 +191,18 @@ void setColor(int colorCode, int setMode){
 
 
 void piezoControl_for_mqtt(void) {
-      long time_diff = floor((millis() - piezo_time)/100)*100;
-      if(time_diff % 1000 == 0) {
-        ledcWriteTone(channel, freq);
-      } else if(time_diff % 500 == 0){
-        ledcWriteTone(channel, freq2);
-      }
-      if(time_diff > 3000){
-        ledcWrite(channel, 0);
-        piezo_controlled_by_mqtt = false;
+      if(piezo_controlled_by_mqtt) {
+        long time_diff = floor((millis() - piezo_time)/100)*100;
+        if(time_diff % 1000 == 0) {
+          ledcWriteTone(channel, freq);
+        } else if(time_diff % 500 == 0){
+          ledcWriteTone(channel, freq2);
+        }
+        if(time_diff > piezo_time_mqtt*1000){
+          ledcWrite(channel, 0);
+          piezo_controlled_by_mqtt = false;
+          Serial.println("piezo end");
+        }
       }
 }
 
@@ -240,7 +244,7 @@ void setup() {
   //initLEDstripe();
   pixels.begin();
   pixels.clear();
-  setColor(LED_COLOR_RED, LED_MODE_OFF);
+  setColor(LED_COLOR_RED, LED_COLOR_ORANGE);
   delay(10);
 }
 
@@ -268,18 +272,20 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.println(strcmp(state_msg, "on") == 0);
     if(strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "on") == 0){
       //change led
-      if((unsigned)strlen(data) >= 2) {
+      if((unsigned)strlen(data_msg) >= 2) {
         int led_col = data_msg[0] - 48;
         int led_st = data_msg[2] - 48;
         if(led_col >= 0 && led_col <= 9 && led_st >= 0 && led_st <= 8) {
           setColor(led_col, led_st);
           Serial.println("led");
           Serial.println(data_msg);
-        } else if(led_col == 9) {
+        } else if(led_st == 9) {
           Serial.println("start piezo");
           ledcWrite(channel, 125);
           ledcWriteTone(channel, freq);
           piezo_controlled_by_mqtt = true;
+          piezo_time = millis();
+          piezo_time_mqtt = led_col;
         } else {
           Serial.println("invalid led/piezo control parameters");
         }
@@ -290,13 +296,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
     if(strcmp(topic, "5/safe/activate") == 0 && strcmp(method_msg, "STATUS") == 0 && strcmp(state_msg, "solved") == 0){
       safeStatus = locked_state;
+      setColor(LED_COLOR_ORANGE, LED_MODE_ON);
       printStatus();
     } 
     
 }
 
-long piezo_time = 0;
-int count_num = 0;
 
 void loop() {
   //if (safe_status != openLock_state) {    // just to be sure
@@ -307,6 +312,7 @@ void loop() {
       Serial.println("no connection");
       client.connect("SafeDevice_M");
       client.subscribe(activateTopicName);
+      client.subscribe(thisTopicName);
     }
   client.loop();
   if (connectWLAN) {
@@ -339,12 +345,16 @@ void loop() {
       Serial.println(led_brightness);
     }
   } else if (led_mode == LED_MODE_BLINK) {
-    if(millis() - delay_led > 200){
+    if(millis() - delay_led > 500){
       delay_led = millis();
       if(led_asc){
-        pixels.clear();
-      }else {
+        pixels.setBrightness(20);
         pixels.show();
+        Serial.println("led blink on");
+      }else {
+        pixels.setBrightness(MAX_BRIGHT_DEACT);
+        pixels.show();
+        Serial.println("led blink off");
       }
       if(led_asc){
         led_asc = false;
@@ -381,6 +391,7 @@ void action() {
       if(time_diff > 3000){
         ledcWrite(channel, 0);
         safeStatus = locked_state;
+        setColor(LED_COLOR_ORANGE, LED_MODE_ON);  // orange again
       }
     }
     break;
@@ -413,6 +424,7 @@ void action() {
         safeStatus = unlocked_state;
         digitalWrite(LOCKPIN, LOW);
         client.publish(thisTopicName, createJson("STATUS", "solved", ""), true);
+        setColor(LED_COLOR_GREEN, LED_MODE_ON); // Green on
       }
       initArray();
     }
@@ -456,11 +468,13 @@ void lock() {
   initArray();
   safeStatus = locked_state;
   printStatus();
+  setColor(LED_COLOR_ORANGE, LED_COLOR_ORANGE);
 }
 
 void wrongSafePassword() {
   printSafePassword();
   safeStatus = wrongSafePassword_state;
+  setColor(LED_COLOR_RED, LED_MODE_BLINK); //red blink
   printStatus();
   startTime = millis();
 }
@@ -481,6 +495,7 @@ void checkSafePassword() {
   }
   // safe code correct:
   safeStatus = openLock_state;
+  setColor(LED_COLOR_GREEN, LED_MODE_BLINK); //green lock
   countdown = countdownStart;
   startTime = millis();
   initArray();
@@ -564,6 +579,7 @@ void printCountdown() {
   if (countdown <= 0) {
     digitalWrite(LOCKPIN, LOW);
     safeStatus = locked_state;
+    setColor(LED_COLOR_ORANGE, LED_MODE_ON);
     initArray();
     printStatus();
     // TODO: switch lock off!!!
@@ -627,8 +643,9 @@ void checkPiezo() {
   accel.getEvent(&event);
   double vec = sqrt((event.acceleration.x)*(event.acceleration.x) + (event.acceleration.y)*(event.acceleration.y) + (event.acceleration.z)*(event.acceleration.z));
   // Serial.println(vec);
-  if((safeStatus == locked_state) and (vec > 20)){
+  if((safeStatus == locked_state) and (vec > 12)){
      safeStatus = lockedAlarm_state;
+     setColor(LED_COLOR_RED, LED_MODE_BLINK);
      printStatus();
      piezo_time = millis();
      ledcWrite(channel, 125);
