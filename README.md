@@ -63,7 +63,7 @@ Markus Schwörer, Florian Bregler, Frank Mutter
 
 standart JSON message on topic 5/safe/control with
 data = "x:y". x is color and y is the mode
-Farben:
+
 
 colors (x):
 * LED_COLOR_WHITE 0
