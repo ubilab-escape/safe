@@ -99,10 +99,12 @@ Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 #define LED_COLOR_RED 1
 #define LED_COLOR_GREEN 2
 #define LED_COLOR_BLUE  3
+#define LED_COLOR_ORANGE 4
 
 #define LED_MODE_ON 0
 #define LED_MODE_OFF 1
 #define LED_MODE_PULSE 2
+#define LED_MODE_BLINK
 
 #define SWITCH_PIN  32
 #define LOCKPIN 18
@@ -131,7 +133,7 @@ const int messageLength = 1000;  // time while the message "wrong safe code" is 
 unsigned long startTime, currentTime;
 
 int countdown = countdownStart;
-
+bool piezo_controlled_by_mqtt = false;
 // speaker:
 const int freq = 3000;
 const int freq2 = 4000;
@@ -156,6 +158,9 @@ void setColor(int colorCode, int setMode){
     case LED_COLOR_BLUE: // blue
       col = pixels.Color(0, 0, 255);
     break;
+    case LED_COLOR_ORANGE:
+      col = pixels.Color(255, 128, 0);
+    break;
   }
   for(int i=0;i<NUMPIXELS;i++){
     pixels.setPixelColor(i, col);
@@ -173,8 +178,28 @@ void setColor(int colorCode, int setMode){
     case 2:
       led_brightness = 60;
       pixels.show();
+      delay_led = 0;
+    break;
+    case LED_MODE_BLINK:
+      pixels.setBrightness(MAX_BRIGHT_DEACT);
+      pixels.show();
+      delay_led = 0;
     break;
   }
+}
+
+
+void piezoControl_for_mqtt(void) {
+      long time_diff = floor((millis() - piezo_time)/100)*100;
+      if(time_diff % 1000 == 0) {
+        ledcWriteTone(channel, freq);
+      } else if(time_diff % 500 == 0){
+        ledcWriteTone(channel, freq2);
+      }
+      if(time_diff > 3000){
+        ledcWrite(channel, 0);
+        piezo_controlled_by_mqtt = false;
+      }
 }
 
 char* createJson(char* method_s, char* state_s, char* data_s){
@@ -236,18 +261,31 @@ void callback(char* topic, byte* payload, unsigned int length) {
     deserializeJson(mqtt_decoder, msg);
     const char* method_msg = mqtt_decoder["method"];
     const char* state_msg = mqtt_decoder["state"];
-    int data_msg = mqtt_decoder["data"];
+    const char* data_msg = mqtt_decoder["data"];
     Serial.println(method_msg);
     Serial.println(state_msg);
     Serial.println(strcmp(method_msg, "TRIGGER") == 0);
     Serial.println(strcmp(state_msg, "on") == 0);
     if(strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "on") == 0){
       //change led
-      int led_col = data_msg & 0x0F;
-      int led_st = (data_msg & 0xF0) >> 4;
-      setColor(led_col, led_st);
-      Serial.println("led");
-      Serial.println(data_msg);
+      if((unsigned)strlen(data) >= 2) {
+        int led_col = data_msg[0] - 48;
+        int led_st = data_msg[2] - 48;
+        if(led_col >= 0 && led_col <= 9 && led_st >= 0 && led_st <= 8) {
+          setColor(led_col, led_st);
+          Serial.println("led");
+          Serial.println(data_msg);
+        } else if(led_col == 9) {
+          Serial.println("start piezo");
+          ledcWrite(channel, 125);
+          ledcWriteTone(channel, freq);
+          piezo_controlled_by_mqtt = true;
+        } else {
+          Serial.println("invalid led/piezo control parameters");
+        }
+      } else {
+        Serial.println("failed to parse led parameters");
+      }
     } 
 
     if(strcmp(topic, "5/safe/activate") == 0 && strcmp(method_msg, "STATUS") == 0 && strcmp(state_msg, "solved") == 0){
@@ -280,7 +318,8 @@ void loop() {
   action();
   printStatus();
   checkPiezo();
-
+  piezoControl_for_mqtt();
+  
   if(led_mode == LED_MODE_PULSE) {
     if(millis() - delay_led > 200){
       delay_led = millis();
@@ -298,6 +337,20 @@ void loop() {
       pixels.show();
       Serial.println("Brighntess set to ");
       Serial.println(led_brightness);
+    }
+  } else if (led_mode == LED_MODE_BLINK) {
+    if(millis() - delay_led > 200){
+      delay_led = millis();
+      if(led_asc){
+        pixels.clear();
+      }else {
+        pixels.show();
+      }
+      if(led_asc){
+        led_asc = false;
+      } else {
+        led_asc = true;
+      }
     }
   }
 }
