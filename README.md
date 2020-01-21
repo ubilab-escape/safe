@@ -61,11 +61,10 @@ Markus Schwörer, Florian Bregler, Frank Mutter
 
 ## Protocol to control leds and piezo via mqtt
 
-standart JSON message on topic 5/safe/control with
-data = "x:y". x is color and y is the mode
+standart JSON message on topic 5/safe/control with data = "x:y". x is color and y is the mode.
 
 
-colors (x):
+Colors (x):
 * LED_COLOR_WHITE 0
 * LED_COLOR_RED 1
 * LED_COLOR_GREEN 2
