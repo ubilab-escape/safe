@@ -77,8 +77,8 @@ Mode (y):
 * LED_MODE_OFF 1
 * LED_MODE_PULSE 2
 * LED_MODE_BLINK 3
-
 * LED_MODE_PIEZO 9
+
 For LED_MODE_PIEZO the color parameter is the time of the buzzer sound in seconds.
 
 examples:
