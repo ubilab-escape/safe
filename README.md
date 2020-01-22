@@ -84,7 +84,7 @@ examples:
 * "{\"method\": \"TRIGGER\", \"state\": \"on\", \"data\": \"3:0\" }"
 => Turns blue LEDs on.
 * "{\"method\": \"TRIGGER\", \"state\": \"on\", \"data\": \"4:3\" }"
-=> LEDs red blinking.
+=> LEDs orange blinking.
 * "{\"method\": \"TRIGGER\", \"state\": \"on\", \"data\": \"5:9\" }"
 => Buzzer sound for 5 seconds (max value: 9)
 
