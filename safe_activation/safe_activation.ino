@@ -26,8 +26,9 @@ char* puzzleSolved_message = "{\"method\": \"STATUS\", \"state\": \"solved\"}";
 #define LED_S_SOLVED 32
 #define LED_V_SOLVED 23
 #define MEASUREMENT_PIN A0
-#define LOWER_THRESHOLD 150
-#define HIGHER_THRESHOLD 250
+#define LOWER_THRESHOLD 500
+#define HIGHER_THRESHOLD 700
+#define WIFI_TIMEOUT_MS 5000
 unsigned char switch_status = 0;
 unsigned char voltage_status = 0;
 unsigned char puzzle_solved = 0;
@@ -88,7 +89,6 @@ void loop() {
       puzzle_solved = 0;
     }
   }
-  delay(500);
 }
 
 
@@ -99,12 +99,15 @@ void setup_wifi() {
   Serial.println();
   Serial.print("Connecting to ");
   Serial.println(ssid);
-
+   int timeout_start = millis();
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
+     if (timeout_start + WIFI_TIMEOUT_MS < millis()) {
+      ESP.restart();
+    }
   }
   digitalWrite(LED_S_SOLVED,LOW);
   digitalWrite(LED_V_SOLVED, LOW);
@@ -143,8 +146,7 @@ void check_switches(){
   Serial.print("S6: "); s6_val = digitalRead(S6); Serial.println(s6_val);
   Serial.print("S7: "); s7_val = digitalRead(S7); Serial.println(s7_val);
   Serial.print("S8: "); s8_val = digitalRead(S8); Serial.println(s8_val);
-  //if(!s2_val && !s3_val && !s6_val && !s8_val && s1_val && s4_val && s5_val && s7_val){
-  if(!s2_val && !s3_val && !s8_val && s1_val && s4_val && s5_val && s7_val){
+  if(!s2_val && !s3_val && !s6_val && !s8_val && s1_val && s4_val && s5_val && s7_val){
     Serial.println("Puzzle Switches Solved");
     switch_status = 1;
     digitalWrite(LED_S_SOLVED,HIGH);
