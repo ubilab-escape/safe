@@ -59,4 +59,34 @@ Total: 128,29 €
 
 Markus Schwörer, Florian Bregler, Frank Mutter
 
+## Protocol to control leds and piezo via mqtt
+
+standart JSON message on topic 5/safe/control with data = "x:y". x is color and y is the mode.
+
+
+Colors (x):
+* LED_COLOR_WHITE 0
+* LED_COLOR_RED 1
+* LED_COLOR_GREEN 2
+* LED_COLOR_BLUE  3
+* LED_COLOR_ORANGE 4
+
+Mode (y):
+* LED_MODE_ON 0
+* LED_MODE_OFF 1
+* LED_MODE_PULSE 2
+* LED_MODE_BLINK 3
+* LED_MODE_PIEZO 9
+
+For LED_MODE_PIEZO the color parameter is the time of the buzzer sound in seconds.
+
+examples:
+* "{\"method\": \"TRIGGER\", \"state\": \"on\", \"data\": \"3:0\" }"
+=> Turns blue LEDs on.
+* "{\"method\": \"TRIGGER\", \"state\": \"on\", \"data\": \"4:3\" }"
+=> LEDs orange blinking.
+* "{\"method\": \"TRIGGER\", \"state\": \"on\", \"data\": \"5:9\" }"
+=> Buzzer sound for 5 seconds (max value: 9)
+
+
 
