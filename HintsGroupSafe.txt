@@ -1,0 +1,15 @@
+Safe Activation:
+
+- Put the switches in the correct Position and divide the Input Voltage to the correct value for powering the safe
+
+- Try to put the resistors in series and parallel to divide the voltage
+
+- Resistors in parallel decrease the resistance while resistors in series increase the overall resistance
+
+- Try to use two one kilo ohm resistors and one two kilo ohm resistor
+
+
+Safe:
+
+- Somewhere in this room must be a hint for remembering the safe code
+ 
