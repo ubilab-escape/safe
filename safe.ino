@@ -1,9 +1,6 @@
 /* 
  * TODO:
- * implement connection with server status changes: noPower -> locked, unlocked -> locked??,
  * reset (go back to "noPower_state");
- * implement other functionality (LEDs, vibration sensor, (speaker ??), lock, sensors from
- * the prototype group;
  * change password store location !!!
 */
 // the code for the keypad was taken from https://www.adafruit.com/product/3845 (25.11.19)
@@ -44,7 +41,7 @@
 
 const char* ssid = "...";
 const char* wlan_password = "...";
-const char* MQTT_BROKER = "10.0.0.2";
+const char* MQTT_BROKER = "...";
 
 long piezo_time = 0;
 int count_num = 0;
@@ -133,6 +130,7 @@ enum safeStatusEnum safeStatus = start_state;
 // timer:
 const int messageLength = 1000;  // time while the message "wrong safe code" is shown
 unsigned long startTime, currentTime;
+unsigned long startTime_PS, currentTime_PS;
 
 int countdown = countdownStart;
 bool piezo_controlled_by_mqtt = false;
@@ -191,19 +189,19 @@ void setColor(int colorCode, int setMode){
 
 
 void piezoControl_for_mqtt(void) {
-      if(piezo_controlled_by_mqtt) {
-        long time_diff = floor((millis() - piezo_time)/100)*100;
-        if(time_diff % 1000 == 0) {
-          ledcWriteTone(channel, freq);
-        } else if(time_diff % 500 == 0){
-          ledcWriteTone(channel, freq2);
-        }
-        if(time_diff > piezo_time_mqtt*1000){
-          ledcWrite(channel, 0);
-          piezo_controlled_by_mqtt = false;
-          Serial.println("piezo end");
-        }
-      }
+  if(piezo_controlled_by_mqtt) {
+    long time_diff = floor((millis() - piezo_time)/100)*100;
+    if(time_diff % 1000 == 0) {
+      ledcWriteTone(channel, freq);
+    } else if(time_diff % 500 == 0){
+      ledcWriteTone(channel, freq2);
+    }
+    if(time_diff > piezo_time_mqtt*1000){
+      ledcWrite(channel, 0);
+      piezo_controlled_by_mqtt = false;
+      Serial.println("piezo end");
+    }
+  }
 }
 
 char* createJson(char* method_s, char* state_s, char* data_s){
@@ -246,6 +244,7 @@ void setup() {
   pixels.clear();
   setColor(LED_COLOR_RED, LED_COLOR_ORANGE);
   delay(10);
+  startTime_PS = millis();
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -304,16 +303,15 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 
 void loop() {
-  //if (safe_status != openLock_state) {    // just to be sure
-  //  digitalWrite(LOCKPIN, LOW);
-  //}
-  esp_wifi_set_ps(WIFI_PS_NONE);          // TODO: only every 10s or so ...
-  while (!client.connected()){
-      Serial.println("no connection");
-      client.connect("SafeDevice_M");
-      client.subscribe(activateTopicName);
-      client.subscribe(thisTopicName);
-    }
+  if (safeStatus != openLock_state) {    // just to be sure
+    digitalWrite(LOCKPIN, LOW);
+  }
+  while (!client.connected()) {
+    Serial.println("no connection");
+    client.connect("SafeDevice_M");
+    client.subscribe(activateTopicName);
+    client.subscribe(thisTopicName);
+  }
   client.loop();
   if (connectWLAN) {
     if (WiFi.waitForConnectResult() != WL_CONNECTED) {    // TODO: better solution? problem: ESP loses the current state if the connection is lost!
@@ -363,6 +361,12 @@ void loop() {
       }
     }
   }
+  currentTime_PS = millis();
+  if (currentTime_PS - startTime_PS > 10000) {
+	Serial.println("execute: esp_wifi_set_ps(WIFI_PS_NONE);");
+	esp_wifi_set_ps(WIFI_PS_NONE);
+	startTime_PS = millis();
+  }
 }
 
 void action() {
@@ -370,7 +374,7 @@ void action() {
     case noPower_state:
     {
       if (!WLAN_enable) {
-        char key2 = keypad.getKey();       // TODO: remove and implement MQTT here
+        char key2 = keypad.getKey();
         if (key2 != NO_KEY) {
           if (key2 == '#' or key2 == '*') {
             lock();
@@ -464,7 +468,10 @@ void append(char inpChar) {
 }
 
 void lock() {
-  // TODO: check, if safe is closed
+  int switchValue3 = digitalRead(SWITCH_PIN);
+  if (switchValue3 == 0) {
+    lock();
+  }
   initArray();
   safeStatus = locked_state;
   printStatus();
@@ -572,7 +579,7 @@ void printCountdown() {
   if (currentTime < startTime) {
     // TODO: is this necessary to prevent problems with overflow (restart with 0) ??
     safeStatus = locked_state;
-    // TODO: switch lock off!!!
+    digitalWrite(LOCKPIN, LOW);
     return;
   }
   countdown = trunc(startTime/1000 + countdownStart - currentTime/1000);
@@ -582,7 +589,7 @@ void printCountdown() {
     setColor(LED_COLOR_ORANGE, LED_MODE_ON);
     initArray();
     printStatus();
-    // TODO: switch lock off!!!
+    digitalWrite(LOCKPIN, LOW);
     return;
   }
   lcd.setCursor(0, 1);
@@ -660,7 +667,6 @@ void initLEDstripe() {
     pixels.setPixelColor(i, pixels.Color(255, 200, 50));
     pixels.show(); // This sends the updated pixel color to the hardware.
   }
-  //delay(100);         // TODO: remove?
 }
 
 void setLEDstripe() {
@@ -676,7 +682,6 @@ void setLEDstripe() {
  for(int i = MAX_BRIGHT_DEACT; i > MIN_BRIGHT_DEACT;i-= 2){
   pixels.setBrightness(i);
   pixels.show(); // This sends the updated pixel color to the hardware.
-  //delay(100);       // TODO: remove?
  }
   //pixels.clear();
 }
