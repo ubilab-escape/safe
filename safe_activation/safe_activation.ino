@@ -4,11 +4,14 @@
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
-const char* ssid = "...";
-const char* password = "...";
+#include <Preferences.h>
+
+const char* key_ssid = "ssid";
+const char* key_pwd = "pass";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+Preferences preferences;
 
 // Add your MQTT Broker IP address, example:
 const char* mqtt_server = "10.0.0.2";
@@ -97,10 +100,16 @@ void setup_wifi() {
   delay(10);
   // We start by connecting to a WiFi network
   Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-   int timeout_start = millis();
-  WiFi.begin(ssid, password);
+  Serial.print("Connecting");
+  int timeout_start = millis();
+
+  char* ssid = NULL;
+  char* wlan_password = NULL;
+  preferences.begin("wifi", false); 
+  preferences.getString(key_pwd, wlan_password, 30);
+  preferences.getString(key_ssid, ssid, 30);
+  preferences.end();
+  WiFi.begin(ssid, wlan_password);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);

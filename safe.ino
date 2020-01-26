@@ -26,6 +26,7 @@
 #include <PubSubClient.h>     // library for MQTT
 #include <Adafruit_NeoPixel.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
 
 #define USE_ESP32
 #define WLAN_enable true
@@ -39,10 +40,8 @@
 #define thisTopicName "5/safe/control"
 #define activateTopicName "5/safe/activate"
 
-const char* ssid = "...";
-const char* wlan_password = "...";
 const char* MQTT_BROKER = "...";
-
+Preferences preferences;
 long piezo_time = 0;
 int count_num = 0;
 bool connectWLAN = WLAN_enable;
@@ -63,6 +62,9 @@ char keys[ROWS][COLS] = {
   {'7', '8', '9'},
   {'*', '0', '#'}
 };
+
+const char* key_ssid = "ssid";
+const char* key_pwd = "pass";
 
 #ifdef USE_ESP32
   byte rowPins[ROWS] = {12, 33, 25, 27}; //connect to the row pinouts of the keypad
@@ -691,7 +693,12 @@ void initOTA() {
   printStatus();
   Serial.println("Booting");
   WiFi.mode(WIFI_STA);
-//WiFi.config(10.0.5.1);
+  char* ssid = NULL;
+  char* wlan_password = NULL;
+  preferences.begin("wifi", false); 
+  preferences.getString(key_pwd, wlan_password, 30);
+  preferences.getString(key_ssid, ssid, 30);
+  preferences.end();
   WiFi.begin(ssid, wlan_password);
   int x = millis();
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
