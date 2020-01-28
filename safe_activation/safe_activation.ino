@@ -33,9 +33,15 @@ char* puzzleSolved_message = "{\"method\": \"STATUS\", \"state\": \"solved\"}";
 #define HIGHER_THRESHOLD 700
 #define AMOUNT_CORRECT_MEAS 5
 #define WIFI_TIMEOUT_MS 3000
+typedef enum
+{
+  STATE_INACTIVE = 0,
+  STATE_ACTIVE = 1,
+  STATE_SOLVED = 2,
+  } puzzle_states;
 unsigned char switch_status;
 unsigned char voltage_status;
-unsigned char puzzle_solved;
+unsigned char puzzle_status;
 unsigned int adc_val;
 unsigned int s1_val;
 unsigned int s2_val;
@@ -49,7 +55,7 @@ unsigned int adc_correct_value;
 void setup() {
 switch_status = 0;
 voltage_status = 0;
-puzzle_solved = 0;
+puzzle_status = STATE_INACTIVE;
 adc_val = 0;
 s1_val = 0;
 s2_val = 0;
@@ -69,16 +75,6 @@ adc_correct_value = 0;
   pinMode(S6,INPUT_PULLUP);
   pinMode(S7,INPUT_PULLUP);
   pinMode(S8,INPUT_PULLUP);
-  // Register all Interrupts for the callback function
-  //attachInterrupt(digitalPinToInterrupt(S1), check_switches, CHANGE);
-  //attachInterrupt(digitalPinToInterrupt(S2), check_switches, CHANGE);
-  //attachInterrupt(digitalPinToInterrupt(S3), check_switches, CHANGE);
-  //attachInterrupt(digitalPinToInterrupt(S4), check_switches, CHANGE);
-  //attachInterrupt(digitalPinToInterrupt(S5), check_switches, CHANGE);
-  //attachInterrupt(digitalPinToInterrupt(S6), check_switches, CHANGE);
-  //attachInterrupt(digitalPinToInterrupt(S7), check_switches, CHANGE);
-  //attachInterrupt(digitalPinToInterrupt(S8), check_switches, CHANGE);
-  
   pinMode(LED_S_SOLVED,OUTPUT); digitalWrite(LED_S_SOLVED,HIGH);
   pinMode(LED_V_SOLVED,OUTPUT); digitalWrite(LED_V_SOLVED, HIGH);
   Serial.begin(9600);
@@ -88,7 +84,6 @@ adc_correct_value = 0;
 }
 
 void loop() {
-  
     client.loop();
     while (!client.connected()){
       Serial.println("no connection");
@@ -97,17 +92,16 @@ void loop() {
     }
   voltage_status = check_voltage();
   check_switches();
-  delay(400);
   
     // Publish solved Message once if both parts are solved 
-  if(!puzzle_solved){
+  if(!(puzzle_status = STATE_SOLVED)){
     if(voltage_status  && switch_status){
       Serial.println("Both puzzles solved");
       client.publish("5/safe/activate", puzzleSolved_message, true);
-      puzzle_solved = 1;
+      puzzle_status = STATE_SOLVED;
     }
     else{
-      puzzle_solved = 0;
+      puzzle_status = STATE_ACTIVE;
     }
   }
 }
@@ -121,8 +115,8 @@ void setup_wifi() {
   Serial.print("Connecting");
   int timeout_start = millis();
 
-  char* ssid = NULL;
-  char* wlan_password = NULL;
+  char ssid[30];
+  char wlan_password[30];
   preferences.begin("wifi", false); 
   preferences.getString(key_pwd, wlan_password, 30);
   preferences.getString(key_ssid, ssid, 30);

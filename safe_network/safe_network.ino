@@ -3,9 +3,10 @@
 
 Preferences preferences;
 const char* key_ssid = "ssid";
-const char* ssid = "...";
+const char* ssid = "ubilab_wifi";
 const char* key = "pass";
-const char* passwordToSafe = "...";
+const char* passwordToSafe = "ohg4xah3oufohreiPe7e";
+
 
 void setup() {
   preferences.begin("wifi", false); 
