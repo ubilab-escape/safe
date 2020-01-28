@@ -38,10 +38,9 @@
 #define MAX_BRIGHT_DEACT 120
 #define MQTTport 1883
 #define thisTopicName "5/safe/control"
-#define activateTopicName "5/safe/activate"
 #define ACC_SENSOR_THRESHOLD 12
 
-const char* MQTT_BROKER = "...";
+const char* MQTT_BROKER = "10.0.0.2";
 Preferences preferences;
 long piezo_time = 0;
 int count_num = 0;
@@ -52,7 +51,6 @@ PubSubClient client(espClient);
 long lastMsg = 0;
 char msg[50];
 int value = 0;
-
 // ----------------------------------------------------------------------------------------------
 // keypad:
 const byte ROWS = 4; //four rows
@@ -240,17 +238,31 @@ void setup() {
     client.setServer(MQTT_BROKER, MQTTport);
     client.setCallback(callback);
   }
+  setup_vars();
+}
+
+void setup_vars(){
+  currentTry[SAFE_PW_LENGTH] = {};
   initArray();
   safeStatus = noPower_state;
   printStatus();
   countdown = countdownStart;
   initPWM();
-  //initLEDstripe();
+  initLEDstripe();
   pixels.begin();
   pixels.clear();
-  setColor(LED_COLOR_RED, LED_COLOR_ORANGE);
+  setColor(LED_COLOR_RED, LED_MODE_ON);
   delay(10);
   startTime_PS = millis();
+  int led_mode = 0;
+  uint32_t delay_led = 0;
+  int led_brightness = 60;
+  bool led_asc = 0;
+  uint8_t piezo_time_mqtt = 3;
+  long piezo_time = 0;
+  int count_num = 0;
+  long lastMsg = 0;
+  int value = 0;
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -272,10 +284,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
     const char* state_msg = mqtt_decoder["state"];
     const char* data_msg = mqtt_decoder["data"];
     Serial.println(method_msg);
-    Serial.println(state_msg);
+    Serial.println(data_msg == NULL);
     Serial.println(strcmp(method_msg, "TRIGGER") == 0);
     Serial.println(strcmp(state_msg, "on") == 0);
-    if(strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "on") == 0){
+    if(strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "on") == 0 && data_msg != NULL && (unsigned)strlen(data_msg) >= 1){
       //change led
       if((unsigned)strlen(data_msg) >= 2) {
         int led_col = data_msg[0] - 48;
@@ -299,12 +311,20 @@ void callback(char* topic, byte* payload, unsigned int length) {
       }
     } 
 
-    if(strcmp(topic, "5/safe/activate") == 0 && strcmp(method_msg, "STATUS") == 0 && strcmp(state_msg, "solved") == 0){
+    if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "on") == 0 && ( data_msg == NULL || (unsigned)strlen(data_msg) == 0)){
       safeStatus = locked_state;
       setColor(LED_COLOR_ORANGE, LED_MODE_ON);
       printStatus();
+      client.publish(thisTopicName, createJson("STATUS", "active", ""), true);
     } 
-    
+    if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "off") == 0){
+      if(digitalRead(SWITCH_PIN) == 0){
+        setup_vars();
+        client.publish(thisTopicName, createJson("STATUS", "inactive", ""), true);
+      } else {
+        client.publish(thisTopicName, createJson("STATUS", "failed", "safe is still open, can't reset"), true);
+      }
+    }
 }
 
 
@@ -315,7 +335,6 @@ void loop() {
   while (!client.connected() and connectWLAN) {
     Serial.println("no connection");
     client.connect("SafeDevice_M");
-    client.subscribe(activateTopicName);
     client.subscribe(thisTopicName);
   }
   client.loop();
