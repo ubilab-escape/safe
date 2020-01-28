@@ -39,6 +39,7 @@
 #define MQTTport 1883
 #define thisTopicName "5/safe/control"
 #define activateTopicName "5/safe/activate"
+#define ACC_SENSOR_THRESHOLD 12
 
 const char* MQTT_BROKER = "...";
 Preferences preferences;
@@ -144,6 +145,9 @@ const int resolution = 8;
 // Assign a unique ID to this sensor at the same time
 Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(54321);
 
+bool disguardACCvalues = false;
+int disguardACCvalues_start;
+int disguardACCvalues_time = 100;
 
 void setColor(int colorCode, int setMode){
   uint32_t col = 0;
@@ -308,7 +312,7 @@ void loop() {
   if (safeStatus != openLock_state) {    // just to be sure
     digitalWrite(LOCKPIN, LOW);
   }
-  while (!client.connected()) {
+  while (!client.connected() and connectWLAN) {
     Serial.println("no connection");
     client.connect("SafeDevice_M");
     client.subscribe(activateTopicName);
@@ -375,12 +379,10 @@ void action() {
   switch (safeStatus) {
     case noPower_state:
     {
-      if (!WLAN_enable) {
+      if (!connectWLAN) {
         char key2 = keypad.getKey();
-        if (key2 != NO_KEY) {
-          if (key2 == '#' or key2 == '*') {
-            lock();
-          }
+        if ((key2 != NO_KEY) and (key2 == '#' or key2 == '*')) {
+          lock();
         }
       }
       checkPiezo();
@@ -401,11 +403,14 @@ void action() {
       }
     }
     break;
+    case locked_state:
     {
-      case locked_state:
       char key = keypad.getKey();
       if (key != NO_KEY) {
         append(key);
+      }
+      if (disguardACCvalues and (millis() - disguardACCvalues_start  > disguardACCvalues_time)) {
+        disguardACCvalues = false;
       }
     }
     break;
@@ -427,6 +432,7 @@ void action() {
       digitalWrite(LOCKPIN, HIGH);
       int switchValue = digitalRead(SWITCH_PIN);
       if (switchValue == 1) {
+        digitalWrite(LOCKPIN, LOW);
         safeStatus = unlocked_state;
         digitalWrite(LOCKPIN, LOW);
         client.publish(thisTopicName, createJson("STATUS", "solved", ""), true);
@@ -472,12 +478,11 @@ void append(char inpChar) {
 void lock() {
   int switchValue3 = digitalRead(SWITCH_PIN);
   if (switchValue3 == 0) {
-    lock();
+    initArray();
+    safeStatus = locked_state;
+    printStatus();
+    setColor(LED_COLOR_ORANGE, LED_COLOR_ORANGE);
   }
-  initArray();
-  safeStatus = locked_state;
-  printStatus();
-  setColor(LED_COLOR_ORANGE, LED_COLOR_ORANGE);
 }
 
 void wrongSafePassword() {
@@ -591,7 +596,8 @@ void printCountdown() {
     setColor(LED_COLOR_ORANGE, LED_MODE_ON);
     initArray();
     printStatus();
-    digitalWrite(LOCKPIN, LOW);
+    disguardACCvalues = true;
+    disguardACCvalues_start = millis();
     return;
   }
   lcd.setCursor(0, 1);
@@ -651,14 +657,20 @@ void checkPiezo() {
   sensors_event_t event;
   accel.getEvent(&event);
   double vec = sqrt((event.acceleration.x)*(event.acceleration.x) + (event.acceleration.y)*(event.acceleration.y) + (event.acceleration.z)*(event.acceleration.z));
-  // Serial.println(vec);
-  if((safeStatus == locked_state) and (vec > 12)){
-     safeStatus = lockedAlarm_state;
-     setColor(LED_COLOR_RED, LED_MODE_BLINK);
-     printStatus();
-     piezo_time = millis();
-     ledcWrite(channel, 125);
-     ledcWriteTone(channel, freq);
+  if((safeStatus == locked_state) and (vec > ACC_SENSOR_THRESHOLD)){
+    Serial.println(vec);
+    if (disguardACCvalues) {
+      // this is used to prevent triggering the sensor when the lock is closed
+      disguardACCvalues = false;
+      Serial.println("accerleration sensor value disguarded");
+      return;
+    }
+    safeStatus = lockedAlarm_state;
+    setColor(LED_COLOR_RED, LED_MODE_BLINK);
+    printStatus();
+    piezo_time = millis();
+    ledcWrite(channel, 125);
+    ledcWriteTone(channel, freq);
   }
 }
 
@@ -703,11 +715,9 @@ void initOTA() {
   int x = millis();
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
     char key = keypad.getKey();
-    if (key != NO_KEY) {
-      if (key == '*' or key == '#') {
-        connectWLAN = false;
-        return;
-      }
+    if ((key != NO_KEY) and (key == '*' or key == '#')) {
+      connectWLAN = false;
+      return;
     }
     if (x + 5000 < millis()) {
       ESP.restart();
