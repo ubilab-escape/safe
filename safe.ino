@@ -1,9 +1,6 @@
 /* 
  * TODO:
- * implement connection with server status changes: noPower -> locked, unlocked -> locked??,
  * reset (go back to "noPower_state");
- * implement other functionality (LEDs, vibration sensor, (speaker ??), lock, sensors from
- * the prototype group;
  * change password store location !!!
 */
 // the code for the keypad was taken from https://www.adafruit.com/product/3845 (25.11.19)
@@ -29,6 +26,7 @@
 #include <PubSubClient.h>     // library for MQTT
 #include <Adafruit_NeoPixel.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
 
 #define USE_ESP32
 #define WLAN_enable true
@@ -41,11 +39,10 @@
 #define MQTTport 1883
 #define thisTopicName "5/safe/control"
 #define activateTopicName "5/safe/activate"
+#define ACC_SENSOR_THRESHOLD 12
 
-const char* ssid = "...";
-const char* wlan_password = "...";
-const char* MQTT_BROKER = "10.0.0.2";
-
+const char* MQTT_BROKER = "...";
+Preferences preferences;
 long piezo_time = 0;
 int count_num = 0;
 bool connectWLAN = WLAN_enable;
@@ -66,6 +63,9 @@ char keys[ROWS][COLS] = {
   {'7', '8', '9'},
   {'*', '0', '#'}
 };
+
+const char* key_ssid = "ssid";
+const char* key_pwd = "pass";
 
 #ifdef USE_ESP32
   byte rowPins[ROWS] = {12, 33, 25, 27}; //connect to the row pinouts of the keypad
@@ -133,6 +133,7 @@ enum safeStatusEnum safeStatus = start_state;
 // timer:
 const int messageLength = 1000;  // time while the message "wrong safe code" is shown
 unsigned long startTime, currentTime;
+unsigned long startTime_PS, currentTime_PS;
 
 int countdown = countdownStart;
 bool piezo_controlled_by_mqtt = false;
@@ -144,6 +145,9 @@ const int resolution = 8;
 // Assign a unique ID to this sensor at the same time
 Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(54321);
 
+bool disguardACCvalues = false;
+int disguardACCvalues_start;
+int disguardACCvalues_time = 100;
 
 void setColor(int colorCode, int setMode){
   uint32_t col = 0;
@@ -191,19 +195,19 @@ void setColor(int colorCode, int setMode){
 
 
 void piezoControl_for_mqtt(void) {
-      if(piezo_controlled_by_mqtt) {
-        long time_diff = floor((millis() - piezo_time)/100)*100;
-        if(time_diff % 1000 == 0) {
-          ledcWriteTone(channel, freq);
-        } else if(time_diff % 500 == 0){
-          ledcWriteTone(channel, freq2);
-        }
-        if(time_diff > piezo_time_mqtt*1000){
-          ledcWrite(channel, 0);
-          piezo_controlled_by_mqtt = false;
-          Serial.println("piezo end");
-        }
-      }
+  if(piezo_controlled_by_mqtt) {
+    long time_diff = floor((millis() - piezo_time)/100)*100;
+    if(time_diff % 1000 == 0) {
+      ledcWriteTone(channel, freq);
+    } else if(time_diff % 500 == 0){
+      ledcWriteTone(channel, freq2);
+    }
+    if(time_diff > piezo_time_mqtt*1000){
+      ledcWrite(channel, 0);
+      piezo_controlled_by_mqtt = false;
+      Serial.println("piezo end");
+    }
+  }
 }
 
 char* createJson(char* method_s, char* state_s, char* data_s){
@@ -246,6 +250,7 @@ void setup() {
   pixels.clear();
   setColor(LED_COLOR_RED, LED_COLOR_ORANGE);
   delay(10);
+  startTime_PS = millis();
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -304,16 +309,15 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 
 void loop() {
-  //if (safe_status != openLock_state) {    // just to be sure
-  //  digitalWrite(LOCKPIN, LOW);
-  //}
-  esp_wifi_set_ps(WIFI_PS_NONE);          // TODO: only every 10s or so ...
-  while (!client.connected()){
-      Serial.println("no connection");
-      client.connect("SafeDevice_M");
-      client.subscribe(activateTopicName);
-      client.subscribe(thisTopicName);
-    }
+  if (safeStatus != openLock_state) {    // just to be sure
+    digitalWrite(LOCKPIN, LOW);
+  }
+  while (!client.connected() and connectWLAN) {
+    Serial.println("no connection");
+    client.connect("SafeDevice_M");
+    client.subscribe(activateTopicName);
+    client.subscribe(thisTopicName);
+  }
   client.loop();
   if (connectWLAN) {
     if (WiFi.waitForConnectResult() != WL_CONNECTED) {    // TODO: better solution? problem: ESP loses the current state if the connection is lost!
@@ -363,18 +367,22 @@ void loop() {
       }
     }
   }
+  currentTime_PS = millis();
+  if (currentTime_PS - startTime_PS > 10000) {
+	Serial.println("execute: esp_wifi_set_ps(WIFI_PS_NONE);");
+	esp_wifi_set_ps(WIFI_PS_NONE);
+	startTime_PS = millis();
+  }
 }
 
 void action() {
   switch (safeStatus) {
     case noPower_state:
     {
-      if (!WLAN_enable) {
-        char key2 = keypad.getKey();       // TODO: remove and implement MQTT here
-        if (key2 != NO_KEY) {
-          if (key2 == '#' or key2 == '*') {
-            lock();
-          }
+      if (!connectWLAN) {
+        char key2 = keypad.getKey();
+        if ((key2 != NO_KEY) and (key2 == '#' or key2 == '*')) {
+          lock();
         }
       }
       checkPiezo();
@@ -395,11 +403,14 @@ void action() {
       }
     }
     break;
+    case locked_state:
     {
-      case locked_state:
       char key = keypad.getKey();
       if (key != NO_KEY) {
         append(key);
+      }
+      if (disguardACCvalues and (millis() - disguardACCvalues_start  > disguardACCvalues_time)) {
+        disguardACCvalues = false;
       }
     }
     break;
@@ -421,6 +432,7 @@ void action() {
       digitalWrite(LOCKPIN, HIGH);
       int switchValue = digitalRead(SWITCH_PIN);
       if (switchValue == 1) {
+        digitalWrite(LOCKPIN, LOW);
         safeStatus = unlocked_state;
         digitalWrite(LOCKPIN, LOW);
         client.publish(thisTopicName, createJson("STATUS", "solved", ""), true);
@@ -464,11 +476,13 @@ void append(char inpChar) {
 }
 
 void lock() {
-  // TODO: check, if safe is closed
-  initArray();
-  safeStatus = locked_state;
-  printStatus();
-  setColor(LED_COLOR_ORANGE, LED_COLOR_ORANGE);
+  int switchValue3 = digitalRead(SWITCH_PIN);
+  if (switchValue3 == 0) {
+    initArray();
+    safeStatus = locked_state;
+    printStatus();
+    setColor(LED_COLOR_ORANGE, LED_COLOR_ORANGE);
+  }
 }
 
 void wrongSafePassword() {
@@ -572,7 +586,7 @@ void printCountdown() {
   if (currentTime < startTime) {
     // TODO: is this necessary to prevent problems with overflow (restart with 0) ??
     safeStatus = locked_state;
-    // TODO: switch lock off!!!
+    digitalWrite(LOCKPIN, LOW);
     return;
   }
   countdown = trunc(startTime/1000 + countdownStart - currentTime/1000);
@@ -582,7 +596,8 @@ void printCountdown() {
     setColor(LED_COLOR_ORANGE, LED_MODE_ON);
     initArray();
     printStatus();
-    // TODO: switch lock off!!!
+    disguardACCvalues = true;
+    disguardACCvalues_start = millis();
     return;
   }
   lcd.setCursor(0, 1);
@@ -642,14 +657,20 @@ void checkPiezo() {
   sensors_event_t event;
   accel.getEvent(&event);
   double vec = sqrt((event.acceleration.x)*(event.acceleration.x) + (event.acceleration.y)*(event.acceleration.y) + (event.acceleration.z)*(event.acceleration.z));
-  // Serial.println(vec);
-  if((safeStatus == locked_state) and (vec > 12)){
-     safeStatus = lockedAlarm_state;
-     setColor(LED_COLOR_RED, LED_MODE_BLINK);
-     printStatus();
-     piezo_time = millis();
-     ledcWrite(channel, 125);
-     ledcWriteTone(channel, freq);
+  if((safeStatus == locked_state) and (vec > ACC_SENSOR_THRESHOLD)){
+    Serial.println(vec);
+    if (disguardACCvalues) {
+      // this is used to prevent triggering the sensor when the lock is closed
+      disguardACCvalues = false;
+      Serial.println("accerleration sensor value disguarded");
+      return;
+    }
+    safeStatus = lockedAlarm_state;
+    setColor(LED_COLOR_RED, LED_MODE_BLINK);
+    printStatus();
+    piezo_time = millis();
+    ledcWrite(channel, 125);
+    ledcWriteTone(channel, freq);
   }
 }
 
@@ -660,7 +681,6 @@ void initLEDstripe() {
     pixels.setPixelColor(i, pixels.Color(255, 200, 50));
     pixels.show(); // This sends the updated pixel color to the hardware.
   }
-  //delay(100);         // TODO: remove?
 }
 
 void setLEDstripe() {
@@ -676,7 +696,6 @@ void setLEDstripe() {
  for(int i = MAX_BRIGHT_DEACT; i > MIN_BRIGHT_DEACT;i-= 2){
   pixels.setBrightness(i);
   pixels.show(); // This sends the updated pixel color to the hardware.
-  //delay(100);       // TODO: remove?
  }
   //pixels.clear();
 }
@@ -686,16 +705,19 @@ void initOTA() {
   printStatus();
   Serial.println("Booting");
   WiFi.mode(WIFI_STA);
-//WiFi.config(10.0.5.1);
+  char* ssid = NULL;
+  char* wlan_password = NULL;
+  preferences.begin("wifi", false); 
+  preferences.getString(key_pwd, wlan_password, 30);
+  preferences.getString(key_ssid, ssid, 30);
+  preferences.end();
   WiFi.begin(ssid, wlan_password);
   int x = millis();
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
     char key = keypad.getKey();
-    if (key != NO_KEY) {
-      if (key == '*' or key == '#') {
-        connectWLAN = false;
-        return;
-      }
+    if ((key != NO_KEY) and (key == '*' or key == '#')) {
+      connectWLAN = false;
+      return;
     }
     if (x + 5000 < millis()) {
       ESP.restart();
