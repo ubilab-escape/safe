@@ -705,8 +705,8 @@ void initOTA() {
   printStatus();
   Serial.println("Booting");
   WiFi.mode(WIFI_STA);
-  char* ssid = NULL;
-  char* wlan_password = NULL;
+  char ssid[30];
+  char wlan_password[30];
   preferences.begin("wifi", false); 
   preferences.getString(key_pwd, wlan_password, 30);
   preferences.getString(key_ssid, ssid, 30);
