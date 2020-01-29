@@ -5,6 +5,7 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <Preferences.h>
+#include <ArduinoJson.h>
 
 const char* key_ssid = "ssid";
 const char* key_pwd = "pass";
@@ -17,6 +18,9 @@ Preferences preferences;
 const char* mqtt_server = "10.0.0.2";
 
 char* puzzleSolved_message = "{\"method\": \"STATUS\", \"state\": \"solved\"}";
+char* puzzleActive_message = "{\"method\": \"STATUS\", \"state\": \"active\"}";
+char* puzzleInactive_message = "{\"method\": \"STATUS\", \"state\": \"inactive\"}";
+StaticJsonDocument<300> mqtt_decoder;
 
 #define S1 17
 #define S2 16
@@ -39,6 +43,19 @@ typedef enum
   STATE_ACTIVE = 1,
   STATE_SOLVED = 2,
   } puzzle_states;
+
+typedef enum
+{
+  VOLT_SOLVED = 1,
+  VOLT_NOT_SOLVED = 0,
+  } voltage_states;
+
+typedef enum
+{
+  SWITCH_SOLVED = 1,
+  SWITCH_NOT_SOLVED = 0,
+  } switch_states;
+  
 unsigned char switch_status;
 unsigned char voltage_status;
 unsigned char puzzle_status;
@@ -53,9 +70,9 @@ unsigned int s7_val;
 unsigned int s8_val;
 unsigned int adc_correct_value;
 void setup() {
-switch_status = 0;
-voltage_status = 0;
-puzzle_status = STATE_INACTIVE;
+switch_status = SWITCH_NOT_SOLVED;
+voltage_status = VOLT_NOT_SOLVED;
+puzzle_status = STATE_ACTIVE;
 adc_val = 0;
 s1_val = 0;
 s2_val = 0;
@@ -84,29 +101,26 @@ adc_correct_value = 0;
 }
 
 void loop() {
+   Serial.print("Current State:"); Serial.println(puzzle_status); 
     client.loop();
     while (!client.connected()){
       Serial.println("no connection");
       client.connect("SafeActivation");
-      //client.subscribe("5_safe_activate");
+      client.subscribe("5/safe/activate");
     }
-  voltage_status = check_voltage();
-  check_switches();
-  
+  if(puzzle_status == STATE_ACTIVE){  
+    voltage_status = check_voltage();
+    switch_status = check_switches();
     // Publish solved Message once if both parts are solved 
-  if(!(puzzle_status = STATE_SOLVED)){
-    if(voltage_status  && switch_status){
-      Serial.println("Both puzzles solved");
-      client.publish("5/safe/activate", puzzleSolved_message, true);
-      puzzle_status = STATE_SOLVED;
-    }
-    else{
-      puzzle_status = STATE_ACTIVE;
-    }
+    if(!(puzzle_status == STATE_SOLVED)){
+      if(voltage_status  && switch_status){
+        Serial.println("Both puzzles solved");
+        client.publish("5/safe/activate", puzzleSolved_message, true);
+        puzzle_status = STATE_SOLVED;
+      }
   }
+ }
 }
-
-
 
 void setup_wifi() {
   delay(10);
@@ -150,23 +164,22 @@ unsigned int check_voltage(){
         digitalWrite(LED_V_SOLVED,HIGH);
         Serial.println("Puzzle Voltage Solved");
         adc_correct_value = 0;
-        return 1;
+        return VOLT_SOLVED;
     }
     else{
-      return 0;
+      return VOLT_NOT_SOLVED;
     }
   }
   else{
     digitalWrite(LED_V_SOLVED,LOW);
     adc_correct_value = 0;
-    return 0;
+    return VOLT_NOT_SOLVED;
   }
-  return 0;
+  return VOLT_NOT_SOLVED;
 }
 
-
 // Callback by switch change
-void check_switches(){
+unsigned int check_switches(){
     s1_val = digitalRead(S1);
     s2_val = digitalRead(S2);
     s3_val = digitalRead(S3);
@@ -186,16 +199,18 @@ void check_switches(){
   Serial.print("S7: ");  Serial.println(s7_val);
   Serial.print("S8: ");  Serial.println(s8_val);
   */
+  
   if(!s2_val && !s3_val && !s6_val && !s8_val && s1_val && s4_val && s5_val && s7_val){
     Serial.println("Puzzle Switches Solved");
-    switch_status = 1;
+    delay(200);
     digitalWrite(LED_S_SOLVED,HIGH);
+    return SWITCH_SOLVED;
   }
   else{
-    switch_status = 0;
+    delay(200);
     digitalWrite(LED_S_SOLVED,LOW);
+    return SWITCH_NOT_SOLVED;
   }
-  delay(200);
 } 
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -208,6 +223,24 @@ void callback(char* topic, byte* payload, unsigned int length) {
         msg[i] = (char)payload[i];
     }
     Serial.println();
+ 
     msg[length] = '\0';
     Serial.println(msg);
+    
+    deserializeJson(mqtt_decoder, msg);
+    const char* method_msg = mqtt_decoder["method"];
+    const char* state_msg = mqtt_decoder["state"];
+    const char* data_msg = mqtt_decoder["data"];
+    Serial.println(method_msg);
+    Serial.println(state_msg);
+    Serial.println(strcmp(method_msg, "TRIGGER") == 0);
+    Serial.println(strcmp(state_msg, "on") == 0);
+    if(strcmp(topic, "5/safe/activate") == 0 && strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "on") == 0){
+      puzzle_status = STATE_ACTIVE;
+      client.publish("5/safe/activate", puzzleActive_message, true);
+    }
+    if(strcmp(topic, "5/safe/activate") == 0 && strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "off") == 0){
+      puzzle_status = STATE_INACTIVE;
+      client.publish("5/safe/activate", puzzleInactive_message, true);;
+    }  
 }
