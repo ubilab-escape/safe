@@ -28,7 +28,6 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 
-#define USE_ESP32
 #define WLAN_enable true
 #define SAFE_PW_LENGTH 4
 #define USE_I2C_LCD
@@ -65,14 +64,8 @@ char keys[ROWS][COLS] = {
 const char* key_ssid = "ssid";
 const char* key_pwd = "pass";
 
-#ifdef USE_ESP32
-  byte rowPins[ROWS] = {12, 33, 25, 27}; //connect to the row pinouts of the keypad
-  byte colPins[COLS] = {14, 13, 26}; //connect to the column pinouts of the keypad
-#else
-  byte rowPins[ROWS] = {12, 0, 8, 10}; //connect to the row pinouts of the keypad
-  byte colPins[COLS] = {11, 13, 9}; //connect to the column pinouts of the keypad
-#endif
-
+byte rowPins[ROWS] = {12, 33, 25, 27}; //connect to the row pinouts of the keypad
+byte colPins[COLS] = {14, 13, 26}; //connect to the column pinouts of the keypad
 
 Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 
@@ -80,18 +73,10 @@ Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 // ----------------------------------------------------------------------------------------------
 // LCD:
 #ifdef USE_I2C_LCD
-#  ifdef USE_ESP32
-     LiquidCrystal_I2C lcd(0x27, 16, 2);  // GPIO 21 = SDA; GPIO 22 = SCL (VCC = 5V)
-#  else
-     LiquidCrystal_I2C lcd(0x27, 16, 2);  // pin A4 = SDA; pin A5 = SCL (VCC = 5V)
-#  endif
+  LiquidCrystal_I2C lcd(0x27, 16, 2);  // GPIO 21 = SDA; GPIO 22 = SCL (VCC = 5V)
 #else
-#  ifdef USE_ESP32
-     const int en = 15, rs = 2, d4 = 4, d5 = 5, d6 = 18, d7 = 19;
-#  else
-     const int en = 7, rs = 2, d4 = 3, d5 = 4, d6 = 5, d7 = 6;
-#  endif
-   LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+  const int en = 15, rs = 2, d4 = 4, d5 = 5, d6 = 18, d7 = 19;
+  LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 #endif
 
 #define LED_COLOR_WHITE 0
@@ -190,7 +175,6 @@ void setColor(int colorCode, int setMode){
     break;
   }
 }
-
 
 void piezoControl_for_mqtt(void) {
   if(piezo_controlled_by_mqtt) {
@@ -291,9 +275,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
     const char* data_msg = mqtt_decoder["data"];
     Serial.println(method_msg);
     Serial.println(data_msg == NULL);
-    Serial.println(strcmp(method_msg, "TRIGGER") == 0);
+    Serial.println(strcmp(method_msg, "trigger") == 0);
     Serial.println(strcmp(state_msg, "on") == 0);
-    if(strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "on") == 0 && data_msg != NULL && (unsigned)strlen(data_msg) >= 1){
+    if(strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "on") == 0 && data_msg != NULL && (unsigned)strlen(data_msg) >= 1){
       //change led
       if((unsigned)strlen(data_msg) >= 2) {
         int led_col = data_msg[0] - 48;
@@ -317,13 +301,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
       }
     } 
 
-    if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "on") == 0 && ( data_msg == NULL || (unsigned)strlen(data_msg) == 0)){
+    if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "on") == 0 && ( data_msg == NULL || (unsigned)strlen(data_msg) == 0)){
       safeStatus = locked_state;
       setColor(LED_COLOR_ORANGE, LED_MODE_ON);
       printStatus();
       client.publish(thisTopicName, createJson("STATUS", "active", ""), true);
     } 
-    if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "off") == 0){
+    if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "off") == 0){
       if(digitalRead(SWITCH_PIN) == 0){
         setup_vars();
         client.publish(thisTopicName, createJson("STATUS", "inactive", ""), true);
@@ -332,7 +316,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
       }
     }
 }
-
 
 void loop() {
   if (safeStatus != openLock_state) {    // just to be sure
