@@ -4,14 +4,17 @@
 Preferences preferences;
 const char* key_ssid = "ssid";
 const char* ssid = "...";
-const char* key = "pass";
-const char* passwordToSafe = "...";
+const char* key_WifiPassword = "pass";
+const char* wifiPassword = "...";
+const char* key_safeCode = "safeCode";
+const char* safeCode = "...";
 
 
 void setup() {
   preferences.begin("wifi", false); 
-  preferences.putString(key, passwordToSafe);
+  preferences.putString(key_WifiPassword, wifiPassword);
   preferences.putString(key_ssid, ssid);
+  preferences.putString(key_safeCode, safeCode);
   preferences.end();
 }
 

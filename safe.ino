@@ -29,7 +29,6 @@
 #include <Preferences.h>
 
 #define WLAN_enable true
-#define SAFE_PW_LENGTH 4
 #define USE_I2C_LCD
 #define countdownStart 7
 #define NUMPIXELS      32
@@ -38,6 +37,22 @@
 #define MQTTport 1883
 #define thisTopicName "5/safe/control"
 #define ACC_SENSOR_THRESHOLD 12
+
+#define LED_COLOR_WHITE 0
+#define LED_COLOR_RED 1
+#define LED_COLOR_GREEN 2
+#define LED_COLOR_BLUE 3
+#define LED_COLOR_ORANGE 4
+
+#define LED_MODE_ON 0
+#define LED_MODE_OFF 1
+#define LED_MODE_PULSE 2
+#define LED_MODE_BLINK 3
+
+#define SWITCH_PIN 32
+#define LOCKPIN 18
+#define LED_PIN 2
+#define BUZZER_PIN 4
 
 const char* MQTT_BROKER = "10.0.0.2";
 Preferences preferences;
@@ -79,22 +94,6 @@ Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
   LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 #endif
 
-#define LED_COLOR_WHITE 0
-#define LED_COLOR_RED 1
-#define LED_COLOR_GREEN 2
-#define LED_COLOR_BLUE  3
-#define LED_COLOR_ORANGE 4
-
-#define LED_MODE_ON 0
-#define LED_MODE_OFF 1
-#define LED_MODE_PULSE 2
-#define LED_MODE_BLINK 3
-
-#define SWITCH_PIN  32
-#define LOCKPIN 18
-#define LED_PIN            2
-#define BUZZER_PIN  4
-
 int led_mode = 0;
 uint32_t delay_led = 0;
 int led_brightness = 60;
@@ -107,8 +106,10 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_PIN, NEO_GRB + NEO_K
 
 // ----------------------------------------------------------------------------------------------
 // safe code:
-int safePassword[SAFE_PW_LENGTH] = {4, 2, 4, 2};     // <-------------------------- safe code
-int currentTry[SAFE_PW_LENGTH] = {};
+const char* key_safeCode = "safeCode";
+const char* safeCode;
+int currentTry[30];
+int safeCodeLength;
 // safe status:
 enum safeStatusEnum {start_state, connectingWLAN_state, noPower_state, locked_state, lockedAlarm_state, wrongSafePassword_state, openLock_state, unlocked_state};
 enum safeStatusEnum safeStatus = start_state;
@@ -131,6 +132,106 @@ Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(54321);
 bool disguardACCvalues = false;
 int disguardACCvalues_start;
 int disguardACCvalues_time = 100;
+
+void setup() {
+  Serial.begin(115200);
+  //Serial.begin(9600);
+  pinMode(SWITCH_PIN, INPUT_PULLUP);
+  pinMode(LOCKPIN, OUTPUT);
+  digitalWrite(LOCKPIN, LOW);
+  safeStatus = start_state;
+  printStatus();
+  #ifdef USE_I2C_LCD
+    lcd.init();
+    lcd.backlight();
+  #else
+    lcd.begin(16, 2);
+  #endif
+  esp_wifi_set_ps(WIFI_PS_NONE);
+  if (connectWLAN) {
+    initOTA();
+    client.setServer(MQTT_BROKER, MQTTport);
+    client.setCallback(callback);
+  }
+  readSafeCode();
+  setup_vars();
+}
+
+void loop() {
+  if (safeStatus != openLock_state) {    // just to be sure
+    digitalWrite(LOCKPIN, LOW);
+  }
+  while (!client.connected() and connectWLAN) {
+    Serial.println("no connection");
+    client.connect("SafeDevice_M");
+    client.subscribe(thisTopicName);
+  }
+  client.loop();
+  if (connectWLAN) {
+    if (WiFi.waitForConnectResult() != WL_CONNECTED) {    // TODO: better solution? problem: ESP loses the current state if the connection is lost!
+      initOTA();
+    }
+    ArduinoOTA.handle();
+  }
+  action();
+  printStatus();
+  checkPiezo();
+  piezoControl_for_mqtt();
+  
+  if(led_mode == LED_MODE_PULSE) {
+    if(millis() - delay_led > 200){
+      delay_led = millis();
+      if(led_asc){
+        led_brightness += 10;
+      }else {
+        led_brightness -= 10;
+      }
+      if(led_brightness > MAX_BRIGHT_DEACT){
+        led_asc = false;
+      } else if(led_brightness < MIN_BRIGHT_DEACT){
+        led_asc = true;
+      }
+      pixels.setBrightness(led_brightness);
+      pixels.show();
+      Serial.println("Brighntess set to ");
+      Serial.println(led_brightness);
+    }
+  } else if (led_mode == LED_MODE_BLINK) {
+    if(millis() - delay_led > 500){
+      delay_led = millis();
+      if(led_asc){
+        pixels.setBrightness(20);
+        pixels.show();
+        Serial.println("led blink on");
+      }else {
+        pixels.setBrightness(MAX_BRIGHT_DEACT);
+        pixels.show();
+        Serial.println("led blink off");
+      }
+      if(led_asc){
+        led_asc = false;
+      } else {
+        led_asc = true;
+      }
+    }
+  }
+  currentTime_PS = millis();
+  if (currentTime_PS - startTime_PS > 10000) {
+  Serial.println("execute: esp_wifi_set_ps(WIFI_PS_NONE);");
+  esp_wifi_set_ps(WIFI_PS_NONE);
+  startTime_PS = millis();
+  }
+}
+
+char readSafeCode() {
+  char tempCode[30];
+  preferences.begin("wifi", false);
+  preferences.getString("safeCode", tempCode, 30);
+  preferences.end();
+  safeCode = tempCode;
+  safeCodeLength = strlen(safeCode);
+  initArray();
+}
 
 void setColor(int colorCode, int setMode){
   uint32_t col = 0;
@@ -202,29 +303,6 @@ char* createJson(char* method_s, char* state_s, char* data_s){
   return JSON_String;
 }
 
-void setup() {
-  Serial.begin(115200);
-  //Serial.begin(9600);
-  pinMode(SWITCH_PIN, INPUT_PULLUP);
-  pinMode(LOCKPIN, OUTPUT);
-  digitalWrite(LOCKPIN, LOW);
-  safeStatus = start_state;
-  printStatus();
-  #ifdef USE_I2C_LCD
-    lcd.init();
-    lcd.backlight();
-  #else
-    lcd.begin(16, 2);
-  #endif
-  esp_wifi_set_ps(WIFI_PS_NONE);
-  if (connectWLAN) {
-    initOTA();
-    client.setServer(MQTT_BROKER, MQTTport);
-    client.setCallback(callback);
-  }
-  setup_vars();
-}
-
 void setup_vars(){
   led_asc = 0;
   piezo_time_mqtt = 3;
@@ -232,7 +310,6 @@ void setup_vars(){
   count_num = 0;
   lastMsg = 0;
   value = 0;
-  initArray();
   safeStatus = noPower_state;
   printStatus();
   countdown = countdownStart;
@@ -315,72 +392,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
         client.publish(thisTopicName, createJson("STATUS", "failed", "safe is still open, can't reset"), true);
       }
     }
-}
-
-void loop() {
-  if (safeStatus != openLock_state) {    // just to be sure
-    digitalWrite(LOCKPIN, LOW);
-  }
-  while (!client.connected() and connectWLAN) {
-    Serial.println("no connection");
-    client.connect("SafeDevice_M");
-    client.subscribe(thisTopicName);
-  }
-  client.loop();
-  if (connectWLAN) {
-    if (WiFi.waitForConnectResult() != WL_CONNECTED) {    // TODO: better solution? problem: ESP loses the current state if the connection is lost!
-      initOTA();
-    }
-    ArduinoOTA.handle();
-  }
-  action();
-  printStatus();
-  checkPiezo();
-  piezoControl_for_mqtt();
-  
-  if(led_mode == LED_MODE_PULSE) {
-    if(millis() - delay_led > 200){
-      delay_led = millis();
-      if(led_asc){
-        led_brightness += 10;
-      }else {
-        led_brightness -= 10;
-      }
-      if(led_brightness > MAX_BRIGHT_DEACT){
-        led_asc = false;
-      } else if(led_brightness < MIN_BRIGHT_DEACT){
-        led_asc = true;
-      }
-      pixels.setBrightness(led_brightness);
-      pixels.show();
-      Serial.println("Brighntess set to ");
-      Serial.println(led_brightness);
-    }
-  } else if (led_mode == LED_MODE_BLINK) {
-    if(millis() - delay_led > 500){
-      delay_led = millis();
-      if(led_asc){
-        pixels.setBrightness(20);
-        pixels.show();
-        Serial.println("led blink on");
-      }else {
-        pixels.setBrightness(MAX_BRIGHT_DEACT);
-        pixels.show();
-        Serial.println("led blink off");
-      }
-      if(led_asc){
-        led_asc = false;
-      } else {
-        led_asc = true;
-      }
-    }
-  }
-  currentTime_PS = millis();
-  if (currentTime_PS - startTime_PS > 10000) {
-	Serial.println("execute: esp_wifi_set_ps(WIFI_PS_NONE);");
-	esp_wifi_set_ps(WIFI_PS_NONE);
-	startTime_PS = millis();
-  }
 }
 
 void action() {
@@ -467,14 +478,14 @@ void append(char inpChar) {
   }
   int inp = inpChar - 48;    // char -> int
   int i = 0;
-  while (i < SAFE_PW_LENGTH) {
+  while (i < safeCodeLength) {
     if (currentTry[i] == -1) {
       currentTry[i] = inp;
       break;
     }
     i++;
   }
-  if (i < SAFE_PW_LENGTH - 1) {
+  if (i < safeCodeLength - 1) {
     // not enough numbers typed in
     printSafePassword();
     return;
@@ -501,15 +512,15 @@ void wrongSafePassword() {
   startTime = millis();
 }
 
-void initArray () {
-  for (int i = 0; i < SAFE_PW_LENGTH; i++) {
+void initArray() {
+  for (int i = 0; i < safeCodeLength; i++) {
     currentTry[i] = -1;
   }
 }
 
 void checkSafePassword() {
-  for (int i = SAFE_PW_LENGTH - 1; i >= 0; i--) {
-    if (currentTry[i] != safePassword[i]) {
+  for (int i = safeCodeLength - 1; i >= 0; i--) {
+    if (currentTry[i] != safeCode[i]) {
       // safe code not correct:
       wrongSafePassword();
       return;
@@ -569,7 +580,7 @@ void printStatus() {
       break;
     default:
       // print nothing:
-      for (int i = 0; i < SAFE_PW_LENGTH; i++) {
+      for (int i = 0; i < safeCodeLength; i++) {
         lcd.setCursor(i, 1);
         lcd.print(" ");
       }
@@ -578,7 +589,7 @@ void printStatus() {
 
 void printSafePassword() {
   // print password:
-  for (int i = 0; i < SAFE_PW_LENGTH; i++) {
+  for (int i = 0; i < safeCodeLength; i++) {
     lcd.setCursor(i, 1);
     if (currentTry[i] == -1) {
       lcd.print("*");
@@ -610,7 +621,7 @@ void printCountdown() {
   }
   lcd.setCursor(0, 1);
   lcd.print(countdown, DEC);
-  for(int i = SAFE_PW_LENGTH; i > 0; i--) {
+  for(int i = safeCodeLength; i > 0; i--) {
     // clear the digits after the number (parts from the password or old digits from the countdown can still be there)
     lcd.print(" ");
   }
@@ -715,7 +726,7 @@ void initOTA() {
   WiFi.mode(WIFI_STA);
   char ssid[30];
   char wlan_password[30];
-  preferences.begin("wifi", false); 
+  preferences.begin("wifi", false);
   preferences.getString(key_pwd, wlan_password, 30);
   preferences.getString(key_ssid, ssid, 30);
   preferences.end();
