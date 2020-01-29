@@ -242,27 +242,33 @@ void setup() {
 }
 
 void setup_vars(){
-  currentTry[SAFE_PW_LENGTH] = {};
+  led_asc = 0;
+  piezo_time_mqtt = 3;
+  piezo_time = 0;
+  count_num = 0;
+  lastMsg = 0;
+  value = 0;
   initArray();
   safeStatus = noPower_state;
   printStatus();
   countdown = countdownStart;
   initPWM();
-  initLEDstripe();
+  // initLEDstripe();
+  led_mode = 0;
+  delay_led = 0;
+  led_brightness = 60;
   pixels.begin();
   pixels.clear();
   setColor(LED_COLOR_RED, LED_MODE_ON);
   delay(10);
   startTime_PS = millis();
-  int led_mode = 0;
-  uint32_t delay_led = 0;
-  int led_brightness = 60;
-  bool led_asc = 0;
-  uint8_t piezo_time_mqtt = 3;
-  long piezo_time = 0;
-  int count_num = 0;
-  long lastMsg = 0;
-  int value = 0;
+
+  led_asc = 0;
+  piezo_time_mqtt = 3;
+  piezo_time = 0;
+  count_num = 0;
+  lastMsg = 0;
+  value = 0;
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
