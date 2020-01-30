@@ -107,7 +107,7 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_PIN, NEO_GRB + NEO_K
 // ----------------------------------------------------------------------------------------------
 // safe code:
 const char* key_safeCode = "safeCode";
-const char* safeCode;
+char safeCode[30];
 int currentTry[30];
 int safeCodeLength;
 // safe status:
@@ -193,7 +193,7 @@ void loop() {
       }
       pixels.setBrightness(led_brightness);
       pixels.show();
-      Serial.println("Brighntess set to ");
+      Serial.print("Brighntess set to ");
       Serial.println(led_brightness);
     }
   } else if (led_mode == LED_MODE_BLINK) {
@@ -217,9 +217,9 @@ void loop() {
   }
   currentTime_PS = millis();
   if (currentTime_PS - startTime_PS > 10000) {
-  Serial.println("execute: esp_wifi_set_ps(WIFI_PS_NONE);");
-  esp_wifi_set_ps(WIFI_PS_NONE);
-  startTime_PS = millis();
+    // Serial.println("execute: esp_wifi_set_ps(WIFI_PS_NONE);");
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    startTime_PS = millis();
   }
 }
 
@@ -228,8 +228,10 @@ char readSafeCode() {
   preferences.begin("wifi", false);
   preferences.getString("safeCode", tempCode, 30);
   preferences.end();
-  safeCode = tempCode;
-  safeCodeLength = strlen(safeCode);
+  safeCodeLength = strlen(tempCode);
+  for (int i = 0; i < safeCodeLength; i++) {
+    safeCode[i] = tempCode[i];
+  }
   initArray();
 }
 
@@ -379,17 +381,17 @@ void callback(char* topic, byte* payload, unsigned int length) {
     } 
 
     if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "on") == 0 && ( data_msg == NULL || (unsigned)strlen(data_msg) == 0)){
-      safeStatus = locked_state;
+      lock();
       setColor(LED_COLOR_ORANGE, LED_MODE_ON);
       printStatus();
-      client.publish(thisTopicName, createJson("STATUS", "active", ""), true);
+      client.publish(thisTopicName, createJson("status", "active", ""), true);
     } 
     if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "off") == 0){
       if(digitalRead(SWITCH_PIN) == 0){
         setup_vars();
-        client.publish(thisTopicName, createJson("STATUS", "inactive", ""), true);
+        client.publish(thisTopicName, createJson("status", "inactive", ""), true);
       } else {
-        client.publish(thisTopicName, createJson("STATUS", "failed", "safe is still open, can't reset"), true);
+        client.publish(thisTopicName, createJson("status", "failed", "safe is still open, can't reset"), true);
       }
     }
 }
@@ -401,6 +403,7 @@ void action() {
       if (!connectWLAN) {
         char key2 = keypad.getKey();
         if ((key2 != NO_KEY) and (key2 == '#' or key2 == '*')) {
+          Serial.println("going into no WLAN state");
           lock();
         }
       }
@@ -454,7 +457,7 @@ void action() {
         digitalWrite(LOCKPIN, LOW);
         safeStatus = unlocked_state;
         digitalWrite(LOCKPIN, LOW);
-        client.publish(thisTopicName, createJson("STATUS", "solved", ""), true);
+        client.publish(thisTopicName, createJson("status", "solved", ""), true);
         setColor(LED_COLOR_GREEN, LED_MODE_ON); // Green on
       }
       initArray();
@@ -496,7 +499,7 @@ void append(char inpChar) {
 
 void lock() {
   int switchValue3 = digitalRead(SWITCH_PIN);
-  if (switchValue3 == 0) {
+  if (switchValue3 == 0 or !(connectWLAN)) {
     initArray();
     safeStatus = locked_state;
     printStatus();
@@ -520,7 +523,7 @@ void initArray() {
 
 void checkSafePassword() {
   for (int i = safeCodeLength - 1; i >= 0; i--) {
-    if (currentTry[i] != safeCode[i]) {
+    if (currentTry[i] != (safeCode[i] - 48)) {
       // safe code not correct:
       wrongSafePassword();
       return;
@@ -735,6 +738,7 @@ void initOTA() {
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
     char key = keypad.getKey();
     if ((key != NO_KEY) and (key == '*' or key == '#')) {
+      Serial.println("set connectWLAN to false");
       connectWLAN = false;
       return;
     }
