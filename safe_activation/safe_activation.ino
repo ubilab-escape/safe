@@ -17,9 +17,9 @@ Preferences preferences;
 // Add your MQTT Broker IP address, example:
 const char* mqtt_server = "10.0.0.2";
 
-char* puzzleSolved_message = "{\"method\": \"STATUS\", \"state\": \"solved\"}";
-char* puzzleActive_message = "{\"method\": \"STATUS\", \"state\": \"active\"}";
-char* puzzleInactive_message = "{\"method\": \"STATUS\", \"state\": \"inactive\"}";
+char* puzzleSolved_message = "{\"method\": \"status\", \"state\": \"solved\"}";
+char* puzzleActive_message = "{\"method\": \"status\", \"state\": \"active\"}";
+char* puzzleInactive_message = "{\"method\": \"status\", \"state\": \"inactive\"}";
 StaticJsonDocument<300> mqtt_decoder;
 
 #define S1 17
@@ -233,14 +233,14 @@ void callback(char* topic, byte* payload, unsigned int length) {
     const char* data_msg = mqtt_decoder["data"];
     Serial.println(method_msg);
     Serial.println(state_msg);
-    Serial.println(strcmp(method_msg, "TRIGGER") == 0);
+    Serial.println(strcmp(method_msg, "trigger") == 0);
     Serial.println(strcmp(state_msg, "on") == 0);
-    if(strcmp(topic, "5/safe/activate") == 0 && strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "on") == 0){
+    if(strcmp(topic, "5/safe/activate") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "on") == 0){
       puzzle_status = STATE_ACTIVE;
       client.publish("5/safe/activate", puzzleActive_message, true);
     }
-    if(strcmp(topic, "5/safe/activate") == 0 && strcmp(method_msg, "TRIGGER") == 0 && strcmp(state_msg, "off") == 0){
+    if(strcmp(topic, "5/safe/activate") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "off") == 0){
       puzzle_status = STATE_INACTIVE;
-      client.publish("5/safe/activate", puzzleInactive_message, true);;
+      client.publish("5/safe/activate", puzzleInactive_message, true);
     }  
 }
