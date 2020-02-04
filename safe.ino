@@ -79,6 +79,8 @@ char keys[ROWS][COLS] = {
 const char* key_ssid = "ssid";
 const char* key_pwd = "pass";
 
+bool flag_finnished = 0;
+
 byte rowPins[ROWS] = {12, 33, 25, 27}; //connect to the row pinouts of the keypad
 byte colPins[COLS] = {14, 13, 26}; //connect to the column pinouts of the keypad
 
@@ -306,6 +308,7 @@ char* createJson(char* method_s, char* state_s, char* data_s){
 }
 
 void setup_vars(){
+  flag_finnished = 0;
   led_asc = 0;
   piezo_time_mqtt = 3;
   piezo_time = 0;
@@ -352,10 +355,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
     const char* method_msg = mqtt_decoder["method"];
     const char* state_msg = mqtt_decoder["state"];
     const char* data_msg = mqtt_decoder["data"];
-    Serial.println(method_msg);
-    Serial.println(data_msg == NULL);
-    Serial.println(strcmp(method_msg, "trigger") == 0);
-    Serial.println(strcmp(state_msg, "on") == 0);
     if(strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "on") == 0 && data_msg != NULL && (unsigned)strlen(data_msg) >= 1){
       //change led
       if((unsigned)strlen(data_msg) >= 2) {
@@ -386,13 +385,20 @@ void callback(char* topic, byte* payload, unsigned int length) {
       printStatus();
       client.publish(thisTopicName, createJson("status", "active", ""), true);
     } 
-    if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "off") == 0){
-      if(digitalRead(SWITCH_PIN) == 0){
+    if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "off") == 0 && ( data_msg == NULL || (unsigned)strlen(data_msg) == 0)){
+       if(digitalRead(SWITCH_PIN) == 0){
         setup_vars();
         client.publish(thisTopicName, createJson("status", "inactive", ""), true);
       } else {
         client.publish(thisTopicName, createJson("status", "failed", "safe is still open, can't reset"), true);
       }
+    } else if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "off") == 0 && strcmp(data_msg, "skipped") == 0){
+      safeStatus = openLock_state;
+      setColor(LED_COLOR_GREEN, LED_MODE_BLINK); //green lock
+      countdown = countdownStart;
+      startTime = millis();
+      initArray();
+      printStatus();
     }
 }
 
@@ -421,7 +427,9 @@ void action() {
       if(time_diff > 3000){
         ledcWrite(channel, 0);
         safeStatus = locked_state;
-        setColor(LED_COLOR_ORANGE, LED_MODE_ON);  // orange again
+        if(!flag_finnished){
+          setColor(LED_COLOR_ORANGE, LED_MODE_ON);  // orange again
+        }
       }
     }
     break;
@@ -459,6 +467,7 @@ void action() {
         digitalWrite(LOCKPIN, LOW);
         client.publish(thisTopicName, createJson("status", "solved", ""), true);
         setColor(LED_COLOR_GREEN, LED_MODE_ON); // Green on
+        flag_finnished = 1;
       }
       initArray();
     }
@@ -503,7 +512,9 @@ void lock() {
     initArray();
     safeStatus = locked_state;
     printStatus();
-    setColor(LED_COLOR_ORANGE, LED_COLOR_ORANGE);
+    if(!flag_finnished) {
+      setColor(LED_COLOR_ORANGE, LED_COLOR_ORANGE);
+    }
   }
 }
 
@@ -688,7 +699,9 @@ void checkPiezo() {
       return;
     }
     safeStatus = lockedAlarm_state;
-    setColor(LED_COLOR_RED, LED_MODE_BLINK);
+    if(!flag_finnished) {
+      setColor(LED_COLOR_RED, LED_MODE_BLINK);
+    }
     printStatus();
     piezo_time = millis();
     ledcWrite(channel, 125);
