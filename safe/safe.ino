@@ -30,7 +30,8 @@
 
 #define WLAN_enable true
 #define USE_I2C_LCD
-#define countdownStart 7
+#define countdownStart 6
+#define reopenDelay    5         // delay in s
 #define NUMPIXELS      32
 #define MIN_BRIGHT_DEACT 30
 #define MAX_BRIGHT_DEACT 120
@@ -79,7 +80,7 @@ char keys[ROWS][COLS] = {
 const char* key_ssid = "ssid";
 const char* key_pwd = "pass";
 
-bool flag_finnished = 0;
+bool flag_finished = 0;
 
 byte rowPins[ROWS] = {12, 33, 25, 27}; //connect to the row pinouts of the keypad
 byte colPins[COLS] = {14, 13, 26}; //connect to the column pinouts of the keypad
@@ -113,7 +114,8 @@ char safeCode[30];
 int currentTry[30];
 int safeCodeLength;
 // safe status:
-enum safeStatusEnum {start_state, connectingWLAN_state, noPower_state, locked_state, lockedAlarm_state, wrongSafePassword_state, openLock_state, unlocked_state};
+enum safeStatusEnum {start_state, connectingWLAN_state, noPower_state, locked_state, lockedAlarm_state,
+                     wrongSafePassword_state, openLock_state, unlocked_state, skippedLocked_state, reopenDelay_state};
 enum safeStatusEnum safeStatus = start_state;
 
 // timer:
@@ -308,7 +310,7 @@ char* createJson(char* method_s, char* state_s, char* data_s){
 }
 
 void setup_vars(){
-  flag_finnished = 0;
+  flag_finished = 0;
   led_asc = 0;
   piezo_time_mqtt = 3;
   piezo_time = 0;
@@ -413,7 +415,6 @@ void action() {
           lock();
         }
       }
-      checkPiezo();
     }
     break;
     case lockedAlarm_state:
@@ -427,7 +428,7 @@ void action() {
       if(time_diff > 3000){
         ledcWrite(channel, 0);
         safeStatus = locked_state;
-        if(!flag_finnished){
+        if(!flag_finished){
           setColor(LED_COLOR_ORANGE, LED_MODE_ON);  // orange again
         }
       }
@@ -438,9 +439,6 @@ void action() {
       char key = keypad.getKey();
       if (key != NO_KEY) {
         append(key);
-      }
-      if (disguardACCvalues and (millis() - disguardACCvalues_start  > disguardACCvalues_time)) {
-        disguardACCvalues = false;
       }
     }
     break;
@@ -464,10 +462,11 @@ void action() {
       if (switchValue == 1) {
         digitalWrite(LOCKPIN, LOW);
         safeStatus = unlocked_state;
+        startTime = millis();
         digitalWrite(LOCKPIN, LOW);
         client.publish(thisTopicName, createJson("status", "solved", ""), true);
         setColor(LED_COLOR_GREEN, LED_MODE_ON); // Green on
-        flag_finnished = 1;
+        flag_finished = 1;
       }
       initArray();
     }
@@ -475,10 +474,43 @@ void action() {
     case unlocked_state:
     {
       int switchValue2 = digitalRead(SWITCH_PIN);
+      currentTime = millis();
       if (switchValue2 == 0) {
-        lock();
+        if (currentTime - startTime < reopenDelay * 1000) {
+          safeStatus = reopenDelay_state;
+        } else {
+          safeStatus = skippedLocked_state;
+        }
       }
     }
+    break;
+    case skippedLocked_state:
+    {
+      char key = keypad.getKey();
+      if (key != NO_KEY) {
+        safeStatus = openLock_state;
+        countdown = countdownStart;
+        startTime = millis();
+        initArray();
+        printStatus();
+      }
+      if (disguardACCvalues and (millis() - disguardACCvalues_start  > disguardACCvalues_time)) {
+        disguardACCvalues = false;
+      }
+    }
+    break;
+    case reopenDelay_state:
+      currentTime = millis();
+      if (currentTime - startTime > reopenDelay * 1000) {
+        safeStatus = skippedLocked_state;
+      }
+      countdown = trunc(startTime/1000 + reopenDelay - currentTime/1000);
+      lcd.setCursor(0, 1);
+      lcd.print(countdown, DEC);
+      for(int i = 16; i > 0; i--) {
+        // clear the digits after the number
+        lcd.print(" ");
+      }
     break;
   }
 }
@@ -512,7 +544,7 @@ void lock() {
     initArray();
     safeStatus = locked_state;
     printStatus();
-    if(!flag_finnished) {
+    if(!flag_finished) {
       setColor(LED_COLOR_ORANGE, LED_COLOR_ORANGE);
     }
   }
@@ -577,11 +609,17 @@ void printStatus() {
     case unlocked_state:
       lcd.print("** SAFE OPEN ***");
       break;
+    case skippedLocked_state:
+      lcd.print("UNLOCKED: PRESS ");
+      break;
+    case reopenDelay_state:
+      lcd.print("ONE MOMENT ...  ");
+      break;
     default:
       lcd.print("ERR printStatus ");
   }
   // lower screen part:
-  lcd.setCursor(1, 0);
+  lcd.setCursor(0, 1);
   switch (safeStatus) {
     case locked_state:
       printSafePassword();
@@ -591,6 +629,11 @@ void printStatus() {
       break;
     case openLock_state:
       printCountdown();
+      break;
+    case skippedLocked_state:
+      lcd.print("ANY KEY TO OPEN!");
+      break;
+    case reopenDelay_state:
       break;
     default:
       // print nothing:
@@ -625,8 +668,8 @@ void printCountdown() {
   countdown = trunc(startTime/1000 + countdownStart - currentTime/1000);
   if (countdown <= 0) {
     digitalWrite(LOCKPIN, LOW);
-    safeStatus = locked_state;
-    setColor(LED_COLOR_ORANGE, LED_MODE_ON);
+    startTime = millis();
+    safeStatus = reopenDelay_state;
     initArray();
     printStatus();
     disguardACCvalues = true;
@@ -635,7 +678,7 @@ void printCountdown() {
   }
   lcd.setCursor(0, 1);
   lcd.print(countdown, DEC);
-  for(int i = safeCodeLength; i > 0; i--) {
+  for(int i = 16; i > 0; i--) {
     // clear the digits after the number (parts from the password or old digits from the countdown can still be there)
     lcd.print(" ");
   }
@@ -690,7 +733,7 @@ void checkPiezo() {
   sensors_event_t event;
   accel.getEvent(&event);
   double vec = sqrt((event.acceleration.x)*(event.acceleration.x) + (event.acceleration.y)*(event.acceleration.y) + (event.acceleration.z)*(event.acceleration.z));
-  if((safeStatus == locked_state) and (vec > ACC_SENSOR_THRESHOLD)){
+  if((safeStatus == locked_state or safeStatus == noPower_state) and (vec > ACC_SENSOR_THRESHOLD)){
     Serial.println(vec);
     if (disguardACCvalues) {
       // this is used to prevent triggering the sensor when the lock is closed
@@ -699,7 +742,7 @@ void checkPiezo() {
       return;
     }
     safeStatus = lockedAlarm_state;
-    if(!flag_finnished) {
+    if(!flag_finished) {
       setColor(LED_COLOR_RED, LED_MODE_BLINK);
     }
     printStatus();
@@ -738,6 +781,7 @@ void setLEDstripe() {
 void initOTA() {
   safeStatus = connectingWLAN_state;
   printStatus();
+  ArduinoOTA.setHostname("safe_control");
   Serial.println("Booting");
   WiFi.mode(WIFI_STA);
   char ssid[30];
