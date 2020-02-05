@@ -233,9 +233,7 @@ char readSafeCode() {
   preferences.getString("safeCode", tempCode, 30);
   preferences.end();
   safeCodeLength = strlen(tempCode);
-  for (int i = 0; i < safeCodeLength; i++) {
-    safeCode[i] = tempCode[i];
-  }
+  memcpy(safeCode, tempCode, safeCodeLength);
   initArray();
 }
 
@@ -583,6 +581,7 @@ void checkSafePassword() {
 
 void printStatus() {
   // upper screen part:
+  // clear display and sets cursor to 0, 0
   lcd.setCursor(0, 0);
   switch (safeStatus) {
     case start_state:
@@ -637,7 +636,7 @@ void printStatus() {
       break;
     default:
       // print nothing:
-      for (int i = 0; i < safeCodeLength; i++) {
+      for (int i = 0; i < 16; i++) {
         lcd.setCursor(i, 1);
         lcd.print(" ");
       }
