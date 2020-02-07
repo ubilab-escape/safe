@@ -1,41 +1,25 @@
 # Team Safe and Puzzles
+
+## Protocol to control leds and piezo via mqtt
+
 ## General Idea:
-After Entering the Lab Room the safe will be deactivated (prototype will be lighted dimmed light). The players first have to supply the safe with power by solving a puzzle (see section puzzle).
+After Entering the Lab Room the safe will be deactivated (red LED light). The players first have to supply the safe with power by solving a puzzle (see section puzzle).
 This action will light up the safe and highlight the second puzzle. This puzzle will ultimately open the safe to give access to the prototype.
-Ideally we like to include the whole room for solving the puzzles. spenden
 
-## Safe building:
-### Use the already build puzzle of the chair
-### Build the safe ourselves:
-* Use acrylic glass and a cnc mill
-* Use a donation box like in the following picture:
-
-<p align="center">
-  <img src="https://displayzentrum.net/images/product_images/info_images/losbox-schloss_2091_0.jpg" width="200" />
-</p>
-<p align="center">
-
-* Replace the existent lock by electronic lock
 
 ## Puzzles:
 ### Puzzle to activate the safe: 
-* Switching levers in correct order
+* Switching levers in correct position
 * Find the correct resistor to generate the correct voltage
 		
 
 ### Puzzle to open the safe:
 * Riddle with numpad input
-* RFID Card
 		
 
 ## toDO
-- [ ] Implement Communication to Server
-- [ ] Cut Hole in wooden Box to integrate peripherals
-- [ ] Buy acrylic glass
-- [ ] Implement NFC Reading
-- [ ] Test Vibration Sensor
-- [ ] Integrate Voltage Divider Riddle into power supply box
-- [ ] Implement LED control
+- [ ] Safe Decoration
+
 
 ## Partlist
 
@@ -81,11 +65,11 @@ Mode (y):
 For LED_MODE_PIEZO the color parameter is the time of the buzzer sound in seconds.
 
 examples:
-* "{\"method\": \"TRIGGER\", \"state\": \"on\", \"data\": \"3:0\" }"
+* "{\"method\": \"trigger\", \"state\": \"on\", \"data\": \"3:0\" }"
 => Turns blue LEDs on.
-* "{\"method\": \"TRIGGER\", \"state\": \"on\", \"data\": \"4:3\" }"
+* "{\"method\": \"trigger\", \"state\": \"on\", \"data\": \"4:3\" }"
 => LEDs orange blinking.
-* "{\"method\": \"TRIGGER\", \"state\": \"on\", \"data\": \"5:9\" }"
+* "{\"method\": \"trigger\", \"state\": \"on\", \"data\": \"5:9\" }"
 => Buzzer sound for 5 seconds (max value: 9)
 
 
