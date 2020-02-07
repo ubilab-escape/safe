@@ -2,9 +2,14 @@
 
 ## Protocol to control leds and piezo via mqtt
 
+## Motivation:
+The Players are told to steal the Prototype from the Lab. The Prototype will be locked in the safe.
+
+
+
 ## General Idea:
 After Entering the Lab Room the safe will be deactivated (red LED light). The players first have to supply the safe with power by solving a puzzle (see section puzzle).
-This action will light up the safe and highlight the second puzzle. This puzzle will ultimately open the safe to give access to the prototype.
+This action will change the light color of the safes LED to orange and activate the second puzzle. This puzzle will ultimately open the safe to give access to the prototype.
 
 
 ## Puzzles:
