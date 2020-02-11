@@ -77,5 +77,7 @@ examples:
 * "{\"method\": \"trigger\", \"state\": \"on\", \"data\": \"5:9\" }"
 => Buzzer sound for 5 seconds (max value: 9)
 
+## Schematics
 
-
+# Safe Activate
+![Safe Activate Schematic](Pics/SchematictActivate.png)
