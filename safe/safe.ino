@@ -16,7 +16,7 @@
 #include <Adafruit_LSM303_Accel.h>
 #include "Adafruit_Sensor.h"
 #include <Wire.h>
-#include <Adafruit_NeoPixel.h>  // library for LED stripe
+#include <NeoPixelBus.h>  // "NeoPixelBus by Makuna" by Micheal C. Miller
 // libraries for ESP OTA update:
 #include <WiFi.h>
 #include "esp_wifi.h"
@@ -222,6 +222,7 @@ void loop() {
   currentTime_PS = millis();
   if (currentTime_PS - startTime_PS > 10000) {
     // Serial.println("execute: esp_wifi_set_ps(WIFI_PS_NONE);");
+    Serial.println(MDNS.begin("ESP WIFI"));
     esp_wifi_set_ps(WIFI_PS_NONE);
     startTime_PS = millis();
   }
@@ -790,7 +791,8 @@ void initOTA() {
   preferences.getString(key_ssid, ssid, 30);
   preferences.end();
   WiFi.begin(ssid, wlan_password);
-  int x = millis();
+  int startTimeWifi = millis();
+  bool retry = true;
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
     char key = keypad.getKey();
     if ((key != NO_KEY) and (key == '*' or key == '#')) {
@@ -798,10 +800,16 @@ void initOTA() {
       connectWLAN = false;
       return;
     }
-    if (x + 5000 < millis()) {
+    if ((startTimeWifi + 3500 < millis()) and retry) {
+      WiFi.begin(ssid, wlan_password);
+      retry = false;
+    }
+    if (startTimeWifi + 5000 < millis()) {
       ESP.restart();
     }
   }
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
   ArduinoOTA
     .onStart([]() {
       String type;
