@@ -81,3 +81,10 @@ examples:
 
 # Safe Activate
 ![Safe Activate Schematic](Pics/SchematictActivate.png)
+
+# Safe Control
+![Safe Control Schematic](Pics/SchematictControl.png)
+
+## Schematics
+
+#Instructions for the Escape Room Operator
