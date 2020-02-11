@@ -83,7 +83,7 @@ examples:
 ![Safe Activate Schematic](Pics/SchematictActivate.png)
 
 # Safe Control
-![Safe Control Schematic](Pics/SchematictControl.png)
+![Safe Control Schematic](Pics/SchematicControl.png)
 
 ## Schematics
 
