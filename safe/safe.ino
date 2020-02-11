@@ -16,7 +16,7 @@
 #include <Adafruit_LSM303_Accel.h>
 #include "Adafruit_Sensor.h"
 #include <Wire.h>
-#include <Adafruit_NeoPixel.h>  // library for LED stripe
+#include <NeoPixelBrightnessBus.h>  // "NeoPixelBus by Makuna" by Micheal C. Miller
 // libraries for ESP OTA update:
 #include <WiFi.h>
 #include "esp_wifi.h"
@@ -24,7 +24,7 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <PubSubClient.h>     // library for MQTT
-#include <Adafruit_NeoPixel.h>
+//#include <Adafruit_NeoPixel.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
 
@@ -102,9 +102,9 @@ uint32_t delay_led = 0;
 int led_brightness = 60;
 bool led_asc = 0;
 uint8_t piezo_time_mqtt = 3;
-
 StaticJsonDocument<300> mqtt_decoder;
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
+NeoPixelBrightnessBus<NeoGrbFeature, Neo800KbpsMethod> pixels(NUMPIXELS, LED_PIN);
+// Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 
 // ----------------------------------------------------------------------------------------------
@@ -158,6 +158,7 @@ void setup() {
     client.setCallback(callback);
   }
   readSafeCode();
+  pixels.Begin();
   setup_vars();
 }
 
@@ -195,8 +196,8 @@ void loop() {
       } else if(led_brightness < MIN_BRIGHT_DEACT){
         led_asc = true;
       }
-      pixels.setBrightness(led_brightness);
-      pixels.show();
+      pixels.SetBrightness(led_brightness);
+      pixels.Show();
       Serial.print("Brighntess set to ");
       Serial.println(led_brightness);
     }
@@ -204,12 +205,12 @@ void loop() {
     if(millis() - delay_led > 500){
       delay_led = millis();
       if(led_asc){
-        pixels.setBrightness(20);
-        pixels.show();
+        pixels.SetBrightness(20);
+        pixels.Show();
         Serial.println("led blink on");
       }else {
-        pixels.setBrightness(MAX_BRIGHT_DEACT);
-        pixels.show();
+        pixels.SetBrightness(MAX_BRIGHT_DEACT);
+        pixels.Show();
         Serial.println("led blink off");
       }
       if(led_asc){
@@ -222,6 +223,7 @@ void loop() {
   currentTime_PS = millis();
   if (currentTime_PS - startTime_PS > 10000) {
     // Serial.println("execute: esp_wifi_set_ps(WIFI_PS_NONE);");
+    Serial.println(MDNS.begin("ESP WIFI"));
     esp_wifi_set_ps(WIFI_PS_NONE);
     startTime_PS = millis();
   }
@@ -237,45 +239,49 @@ char readSafeCode() {
   initArray();
 }
 
-void setColor(int colorCode, int setMode){
-  uint32_t col = 0;
-  switch(colorCode){
+void setRgbColor(int RgbColorCode, int setMode){
+  HtmlColor col;
+  switch(RgbColorCode){
     case LED_COLOR_WHITE: // white
-      col = pixels.Color(255, 255, 255);
+      col = HtmlColor(RgbColor(255, 255, 255));
     break;
     case LED_COLOR_RED: // red
-      col = pixels.Color(255, 0, 0);
+      col = HtmlColor(RgbColor(255, 0, 0));
     break;
     case LED_COLOR_GREEN: // green
-      col = pixels.Color(0, 255, 0);
+      col = HtmlColor(RgbColor(0, 255, 0));
     break;
     case LED_COLOR_BLUE: // blue
-      col = pixels.Color(0, 0, 255);
+      col = HtmlColor(RgbColor(0, 0, 255));
     break;
     case LED_COLOR_ORANGE:
-      col = pixels.Color(255, 128, 0);
+      col = HtmlColor(RgbColor(255, 128, 0));
     break;
   }
   for(int i=0;i<NUMPIXELS;i++){
-    pixels.setPixelColor(i, col);
-    pixels.show(); // This sends the updated pixel color to the hardware.
+    pixels.SetPixelColor(i, col);
+    pixels.Show(); // This sends the updated pixel RgbColor to the hardware.
   }
   led_mode = setMode;
   switch(setMode){
     case 0:
-      pixels.setBrightness(MAX_BRIGHT_DEACT);
-      pixels.show();
+      pixels.SetBrightness(MAX_BRIGHT_DEACT);
+      pixels.Show();
     break;
     case 1:
-      pixels.clear();
+      col = HtmlColor(RgbColor(0, 0, 0));
+        for(int i=0;i<NUMPIXELS;i++){
+          pixels.SetPixelColor(i, col);
+          pixels.Show(); // This sends the updated pixel RgbColor to the hardware.
+        }
     break;
     case 2:
       led_brightness = 60;
       delay_led = 0;
     break;
     case 3:
-      pixels.setBrightness(MAX_BRIGHT_DEACT);
-      pixels.show();
+      pixels.SetBrightness(MAX_BRIGHT_DEACT);
+      pixels.Show();
       delay_led = 0;
     break;
   }
@@ -323,9 +329,7 @@ void setup_vars(){
   led_mode = 0;
   delay_led = 0;
   led_brightness = 60;
-  pixels.begin();
-  pixels.clear();
-  setColor(LED_COLOR_RED, LED_MODE_ON);
+  setRgbColor(LED_COLOR_RED, LED_MODE_ON);
   delay(10);
   startTime_PS = millis();
 
@@ -361,7 +365,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
         int led_col = data_msg[0] - 48;
         int led_st = data_msg[2] - 48;
         if(led_col >= 0 && led_col <= 9 && led_st >= 0 && led_st <= 8) {
-          setColor(led_col, led_st);
+          setRgbColor(led_col, led_st);
           Serial.println("led");
           Serial.println(data_msg);
         } else if(led_st == 9) {
@@ -381,7 +385,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
     if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "on") == 0 && ( data_msg == NULL || (unsigned)strlen(data_msg) == 0)){
       lock();
-      setColor(LED_COLOR_ORANGE, LED_MODE_ON);
+      setRgbColor(LED_COLOR_ORANGE, LED_MODE_ON);
       printStatus();
       client.publish(thisTopicName, createJson("status", "active", ""), true);
     } 
@@ -394,7 +398,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
       }
     } else if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "off") == 0 && strcmp(data_msg, "skipped") == 0){
       safeStatus = openLock_state;
-      setColor(LED_COLOR_GREEN, LED_MODE_BLINK); //green lock
+      setRgbColor(LED_COLOR_GREEN, LED_MODE_BLINK); //green lock
       countdown = countdownStart;
       startTime = millis();
       initArray();
@@ -427,7 +431,7 @@ void action() {
         ledcWrite(channel, 0);
         safeStatus = locked_state;
         if(!flag_finished){
-          setColor(LED_COLOR_ORANGE, LED_MODE_ON);  // orange again
+          setRgbColor(LED_COLOR_ORANGE, LED_MODE_ON);  // orange again
         }
       }
     }
@@ -463,7 +467,7 @@ void action() {
         startTime = millis();
         digitalWrite(LOCKPIN, LOW);
         client.publish(thisTopicName, createJson("status", "solved", ""), true);
-        setColor(LED_COLOR_GREEN, LED_MODE_ON); // Green on
+        setRgbColor(LED_COLOR_GREEN, LED_MODE_ON); // Green on
         flag_finished = 1;
       }
       initArray();
@@ -543,7 +547,7 @@ void lock() {
     safeStatus = locked_state;
     printStatus();
     if(!flag_finished) {
-      setColor(LED_COLOR_ORANGE, LED_COLOR_ORANGE);
+      setRgbColor(LED_COLOR_ORANGE, LED_COLOR_ORANGE);
     }
   }
 }
@@ -551,7 +555,7 @@ void lock() {
 void wrongSafePassword() {
   printSafePassword();
   safeStatus = wrongSafePassword_state;
-  setColor(LED_COLOR_RED, LED_MODE_BLINK); //red blink
+  setRgbColor(LED_COLOR_RED, LED_MODE_BLINK); //red blink
   printStatus();
   startTime = millis();
 }
@@ -572,7 +576,7 @@ void checkSafePassword() {
   }
   // safe code correct:
   safeStatus = openLock_state;
-  setColor(LED_COLOR_GREEN, LED_MODE_BLINK); //green lock
+  setRgbColor(LED_COLOR_GREEN, LED_MODE_BLINK); //green lock
   countdown = countdownStart;
   startTime = millis();
   initArray();
@@ -742,7 +746,7 @@ void checkPiezo() {
     }
     safeStatus = lockedAlarm_state;
     if(!flag_finished) {
-      setColor(LED_COLOR_RED, LED_MODE_BLINK);
+      setRgbColor(LED_COLOR_RED, LED_MODE_BLINK);
     }
     printStatus();
     piezo_time = millis();
@@ -752,30 +756,15 @@ void checkPiezo() {
 }
 
 void initLEDstripe() {
-  pixels.begin();
-  pixels.clear();
-    for(int i=0;i<NUMPIXELS;i++){
-    pixels.setPixelColor(i, pixels.Color(255, 200, 50));
-    pixels.show(); // This sends the updated pixel color to the hardware.
+  pixels.Begin();
+  for(int i=0;i<NUMPIXELS;i++){
+    HtmlColor col = HtmlColor(RgbColor(255, 200, 50));
+    pixels.SetPixelColor(i, col);
+    pixels.Show(); // This sends the updated pixel RgbColor to the hardware.
   }
 }
 
-void setLEDstripe() {
- for(int i=0;i<NUMPIXELS;i++){
-    pixels.setPixelColor(i, pixels.Color(255, 200, 50));
-    pixels.show(); // This sends the updated pixel color to the hardware.
-  }
- for(int i = MIN_BRIGHT_DEACT; i < MAX_BRIGHT_DEACT;i+= 2){
-  pixels.setBrightness(i);
- pixels.show(); // This sends the updated pixel color to the hardware.
-  delay(100);
- }
- for(int i = MAX_BRIGHT_DEACT; i > MIN_BRIGHT_DEACT;i-= 2){
-  pixels.setBrightness(i);
-  pixels.show(); // This sends the updated pixel color to the hardware.
- }
-  //pixels.clear();
-}
+
 
 void initOTA() {
   safeStatus = connectingWLAN_state;
@@ -790,7 +779,8 @@ void initOTA() {
   preferences.getString(key_ssid, ssid, 30);
   preferences.end();
   WiFi.begin(ssid, wlan_password);
-  int x = millis();
+  int startTimeWifi = millis();
+  bool retry = true;
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
     char key = keypad.getKey();
     if ((key != NO_KEY) and (key == '*' or key == '#')) {
@@ -798,10 +788,16 @@ void initOTA() {
       connectWLAN = false;
       return;
     }
-    if (x + 5000 < millis()) {
+    if ((startTimeWifi + 3500 < millis()) and retry) {
+      WiFi.begin(ssid, wlan_password);
+      retry = false;
+    }
+    if (startTimeWifi + 5000 < millis()) {
       ESP.restart();
     }
   }
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
   ArduinoOTA
     .onStart([]() {
       String type;
