@@ -87,4 +87,4 @@ examples:
 
 ## Schematics
 
-#Instructions for the Escape Room Operator
+# Instructions for the Escape Room Operator
