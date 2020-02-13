@@ -85,6 +85,10 @@ examples:
 # Safe Control
 ![Safe Control Schematic](Pics/SchematicControl.png)
 
-## Schematics
+## Flow Charts
 
-# Instructions for the Escape Room Operator
+# Safe Activate
+
+[Safe Activate Flow Chart](Pics/SafeActivateFlowChart.png)
+
+## Instructions for the Escape Room Operator
