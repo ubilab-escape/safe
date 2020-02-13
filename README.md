@@ -89,6 +89,6 @@ examples:
 
 # Safe Activate
 
-[Safe Activate Flow Chart](Pics/SafeActivateFlowChart.png)
+![Safe Activate Flow Chart](Pics/SafeActivateFlowChart.png)
 
 ## Instructions for the Escape Room Operator
