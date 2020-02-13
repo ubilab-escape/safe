@@ -102,12 +102,7 @@ adc_correct_value = 0;
 
 void loop() {
    Serial.print("Current State:"); Serial.println(puzzle_status); 
-    client.loop();
-    while (!client.connected()){
-      Serial.println("no connection");
-      client.connect("SafeActivation");
-      client.subscribe("5/safe/activate");
-    }
+   connect_mqqt();
   if(puzzle_status == STATE_ACTIVE){  
     voltage_status = check_voltage();
     switch_status = check_switches();
@@ -128,7 +123,6 @@ void setup_wifi() {
   Serial.println();
   Serial.print("Connecting");
   int timeout_start = millis();
-
   char ssid[30];
   char wlan_password[30];
   preferences.begin("wifi", false); 
@@ -243,4 +237,14 @@ void callback(char* topic, byte* payload, unsigned int length) {
       puzzle_status = STATE_INACTIVE;
       client.publish("5/safe/activate", puzzleInactive_message, true);
     }  
+}
+
+void connect_mqqt(){
+	client.loop();
+    while (!client.connected()){
+      Serial.println("no connection");
+      client.connect("SafeActivation");
+      client.subscribe("5/safe/activate");
+    }
+    }
 }

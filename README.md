@@ -1,7 +1,5 @@
 # Team Safe and Puzzles
 
-## Protocol to control leds and piezo via mqtt
-
 ## Motivation:
 The Players are told to steal the Prototype from the Lab. The Prototype will be locked in the safe.
 
@@ -80,4 +78,15 @@ examples:
 ## Schematics
 
 # Safe Activate
-![Safe Activate Schematic](Pics/SchematictActivate.png)
+![Safe Activate Schematic](Pics/SchematicActivate.png)
+
+# Safe Control
+![Safe Control Schematic](Pics/SchematicControl.png)
+
+## Flow Charts
+
+# Safe Activate
+
+![Safe Activate Flow Chart](Pics/SafeActivateFlowChart.png)
+
+## Instructions for the Escape Room Operator
