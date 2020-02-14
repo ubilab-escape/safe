@@ -1,8 +1,3 @@
-/* 
- * TODO:
- * reset (go back to "noPower_state");
- * change password store location !!!
-*/
 // the code for the keypad was taken from https://www.adafruit.com/product/3845 (25.11.19)
 // the code for the LCD was taken from https://starthardware.org/lcd/ (4.12.19)
 // the code for the I2C LCD was taken from https://funduino.de/nr-19-i%C2%B2c-display (15.12.19)
@@ -10,7 +5,7 @@
 
 #include "Keypad.h"              // keypad library by Mark Stanley, Alexander Brevig
 #include <LiquidCrystal.h>
-#include <LiquidCrystal_I2C.h>   // I2C library by Frank de Brabander
+#include <LiquidCrystal_I2C.h>   // I2C library by Frank de Brabander (does result in a warning while compiling but works fine)
 // acceleration sensor: libraries needed: Adafruit 9DOF; Adafruit ADXL343; Adafruit AHRS; Adafruit BusIO;
 //                                        Adafruit Circuit Playground; Adafruit LSM303 Accel
 #include <Adafruit_LSM303_Accel.h>
@@ -24,7 +19,6 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <PubSubClient.h>     // library for MQTT
-//#include <Adafruit_NeoPixel.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
 
@@ -59,7 +53,12 @@ const char* MQTT_BROKER = "10.0.0.2";
 Preferences preferences;
 long piezo_time = 0;
 int count_num = 0;
-bool connectWLAN = WLAN_enable;
+bool debugMode = !WLAN_enable;
+
+const char* key_ssid = "ssid";
+const char* key_pwd = "pass";
+
+bool flag_finished = 0;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -77,16 +76,10 @@ char keys[ROWS][COLS] = {
   {'*', '0', '#'}
 };
 
-const char* key_ssid = "ssid";
-const char* key_pwd = "pass";
-
-bool flag_finished = 0;
-
 byte rowPins[ROWS] = {12, 33, 25, 27}; //connect to the row pinouts of the keypad
 byte colPins[COLS] = {14, 13, 26}; //connect to the column pinouts of the keypad
 
 Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
-
 
 // ----------------------------------------------------------------------------------------------
 // LCD:
@@ -121,15 +114,17 @@ enum safeStatusEnum safeStatus = start_state;
 // timer:
 const int messageLength = 1000;  // time while the message "wrong safe code" is shown
 unsigned long startTime, currentTime;
-unsigned long startTime_PS, currentTime_PS;
+unsigned long startTime_PS;
 
 int countdown = countdownStart;
 bool piezo_controlled_by_mqtt = false;
+
 // speaker:
 const int freq = 3000;
 const int freq2 = 4000;
 const int channel = 0;
 const int resolution = 8;
+
 // Assign a unique ID to this sensor at the same time
 Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(54321);
 
@@ -139,7 +134,6 @@ int disguardACCvalues_time = 100;
 
 void setup() {
   Serial.begin(115200);
-  //Serial.begin(9600);
   pinMode(SWITCH_PIN, INPUT_PULLUP);
   pinMode(LOCKPIN, OUTPUT);
   digitalWrite(LOCKPIN, LOW);
@@ -152,7 +146,7 @@ void setup() {
     lcd.begin(16, 2);
   #endif
   esp_wifi_set_ps(WIFI_PS_NONE);
-  if (connectWLAN) {
+  if (!debugMode) {
     initOTA();
     client.setServer(MQTT_BROKER, MQTTport);
     client.setCallback(callback);
@@ -163,26 +157,38 @@ void setup() {
 }
 
 void loop() {
-  if (safeStatus != openLock_state) {    // just to be sure
+  if (safeStatus != openLock_state) {
+    // just to be sure that the lock is not open whenever it is not supposed to to prevent self destruction
     digitalWrite(LOCKPIN, LOW);
   }
-  while (!client.connected() and connectWLAN) {
+  while (!client.connected() and !debugMode) {
+    // in case of a disconnect try to reconnect
     Serial.println("no connection");
     client.connect("SafeDevice_M");
     client.subscribe(thisTopicName);
   }
-  client.loop();
-  if (connectWLAN) {
+  client.loop();                                          // TODO: dont do this in debugMode?
+  if (!debugMode) {
     if (WiFi.waitForConnectResult() != WL_CONNECTED) {    // TODO: better solution? problem: ESP loses the current state if the connection is lost!
       initOTA();
     }
     ArduinoOTA.handle();
   }
-  action();
+  action();     // check state and execute corresponding actions
   printStatus();
   checkPiezo();
   piezoControl_for_mqtt();
+  updateLED();
   
+  if (millis() - startTime_PS > 10000) {
+    // reset power state every 10 seconds to prevent power saving and improve the ping of the ESP significantly
+    // Serial.println(MDNS.begin("ESP WIFI"));    // returns "1" if Wifi is working; good for debugging
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    startTime_PS = millis();
+  }
+}
+
+void updateLED() {
   if(led_mode == LED_MODE_PULSE) {
     if(millis() - delay_led > 200){
       delay_led = millis();
@@ -220,23 +226,6 @@ void loop() {
       }
     }
   }
-  currentTime_PS = millis();
-  if (currentTime_PS - startTime_PS > 10000) {
-    // Serial.println("execute: esp_wifi_set_ps(WIFI_PS_NONE);");
-    Serial.println(MDNS.begin("ESP WIFI"));
-    esp_wifi_set_ps(WIFI_PS_NONE);
-    startTime_PS = millis();
-  }
-}
-
-char readSafeCode() {
-  char tempCode[30];
-  preferences.begin("wifi", false);
-  preferences.getString("safeCode", tempCode, 30);
-  preferences.end();
-  safeCodeLength = strlen(tempCode);
-  memcpy(safeCode, tempCode, safeCodeLength);
-  initArray();
 }
 
 void setRgbColor(int RgbColorCode, int setMode){
@@ -313,34 +302,6 @@ char* createJson(char* method_s, char* state_s, char* data_s){
   return JSON_String;
 }
 
-void setup_vars(){
-  flag_finished = 0;
-  led_asc = 0;
-  piezo_time_mqtt = 3;
-  piezo_time = 0;
-  count_num = 0;
-  lastMsg = 0;
-  value = 0;
-  safeStatus = noPower_state;
-  printStatus();
-  countdown = countdownStart;
-  initPWM();
-  // initLEDstripe();
-  led_mode = 0;
-  delay_led = 0;
-  led_brightness = 60;
-  setRgbColor(LED_COLOR_RED, LED_MODE_ON);
-  delay(10);
-  startTime_PS = millis();
-
-  led_asc = 0;
-  piezo_time_mqtt = 3;
-  piezo_time = 0;
-  count_num = 0;
-  lastMsg = 0;
-  value = 0;
-}
-
 void callback(char* topic, byte* payload, unsigned int length) {
     Serial.print("Received message [");
     Serial.print(topic);
@@ -410,7 +371,7 @@ void action() {
   switch (safeStatus) {
     case noPower_state:
     {
-      if (!connectWLAN) {
+      if (debugMode) {
         char key2 = keypad.getKey();
         if ((key2 != NO_KEY) and (key2 == '#' or key2 == '*')) {
           Serial.println("going into no WLAN state");
@@ -542,7 +503,7 @@ void append(char inpChar) {
 
 void lock() {
   int switchValue3 = digitalRead(SWITCH_PIN);
-  if (switchValue3 == 0 or !(connectWLAN)) {
+  if (switchValue3 == 0 or debugMode) {
     initArray();
     safeStatus = locked_state;
     printStatus();
@@ -558,12 +519,6 @@ void wrongSafePassword() {
   setRgbColor(LED_COLOR_RED, LED_MODE_BLINK); //red blink
   printStatus();
   startTime = millis();
-}
-
-void initArray() {
-  for (int i = 0; i < safeCodeLength; i++) {
-    currentTry[i] = -1;
-  }
 }
 
 void checkSafePassword() {
@@ -687,56 +642,12 @@ void printCountdown() {
   }
 }
 
-void initPWM() {
-  // init pwm
-  ledcSetup(channel, freq, resolution);
-  ledcAttachPin(BUZZER_PIN, channel);
-  ledcWrite(channel, 0);
-  /* Initialise the sensor */
-  if (!accel.begin()) {
-    /* There was a problem detecting the ADXL345 ... check your connections */
-    Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
-  }
-  accel.setRange(LSM303_RANGE_2G);
-  Serial.print("Range set to: ");
-  lsm303_accel_range_t new_range = accel.getRange();
-  switch (new_range) {
-  case LSM303_RANGE_2G:
-    Serial.println("+- 2G");
-    break;
-  case LSM303_RANGE_4G:
-    Serial.println("+- 4G");
-    break;
-  case LSM303_RANGE_8G:
-    Serial.println("+- 8G");
-    break;
-  case LSM303_RANGE_16G:
-    Serial.println("+- 16G");
-    break;
-  }
-
-  accel.setMode(LSM303_MODE_NORMAL);
-  Serial.print("Mode set to: ");
-  lsm303_accel_mode_t new_mode = accel.getMode();
-  switch (new_mode) {
-  case LSM303_MODE_NORMAL:
-    Serial.println("Normal");
-    break;
-  case LSM303_MODE_LOW_POWER:
-    Serial.println("Low Power");
-    break;
-  case LSM303_MODE_HIGH_RESOLUTION:
-    Serial.println("High Resolution");
-    break;
-  }
-}
-
 void checkPiezo() {
   /* Get a new sensor event */
   sensors_event_t event;
   accel.getEvent(&event);
   double vec = sqrt((event.acceleration.x)*(event.acceleration.x) + (event.acceleration.y)*(event.acceleration.y) + (event.acceleration.z)*(event.acceleration.z));
-  if((safeStatus == locked_state or safeStatus == noPower_state) and (vec > ACC_SENSOR_THRESHOLD)){
+  if(safeStatus == locked_state and (vec > ACC_SENSOR_THRESHOLD)){
     Serial.println(vec);
     if (disguardACCvalues) {
       // this is used to prevent triggering the sensor when the lock is closed
@@ -753,75 +664,4 @@ void checkPiezo() {
     ledcWrite(channel, 125);
     ledcWriteTone(channel, freq);
   }
-}
-
-void initLEDstripe() {
-  pixels.Begin();
-  for(int i=0;i<NUMPIXELS;i++){
-    HtmlColor col = HtmlColor(RgbColor(255, 200, 50));
-    pixels.SetPixelColor(i, col);
-    pixels.Show(); // This sends the updated pixel RgbColor to the hardware.
-  }
-}
-
-
-
-void initOTA() {
-  safeStatus = connectingWLAN_state;
-  printStatus();
-  ArduinoOTA.setHostname("safe_control");
-  Serial.println("Booting");
-  WiFi.mode(WIFI_STA);
-  char ssid[30];
-  char wlan_password[30];
-  preferences.begin("wifi", false);
-  preferences.getString(key_pwd, wlan_password, 30);
-  preferences.getString(key_ssid, ssid, 30);
-  preferences.end();
-  WiFi.begin(ssid, wlan_password);
-  int startTimeWifi = millis();
-  bool retry = true;
-  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    char key = keypad.getKey();
-    if ((key != NO_KEY) and (key == '*' or key == '#')) {
-      Serial.println("set connectWLAN to false");
-      connectWLAN = false;
-      return;
-    }
-    if ((startTimeWifi + 3500 < millis()) and retry) {
-      WiFi.begin(ssid, wlan_password);
-      retry = false;
-    }
-    if (startTimeWifi + 5000 < millis()) {
-      ESP.restart();
-    }
-  }
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-  ArduinoOTA
-    .onStart([]() {
-      String type;
-      if (ArduinoOTA.getCommand() == U_FLASH)
-        type = "sketch";
-      else // U_SPIFFS
-        type = "filesystem";
-
-      // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-      Serial.println("Start updating " + type);
-    })
-    .onEnd([]() {
-      Serial.println("\nEnd");
-    })
-    .onProgress([](unsigned int progress, unsigned int total) {
-      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-    })
-    .onError([](ota_error_t error) {
-      Serial.printf("Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-      else if (error == OTA_END_ERROR) Serial.println("End Failed");
-    });
-    ArduinoOTA.begin();
 }
