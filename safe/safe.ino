@@ -147,6 +147,7 @@ void setup() {
   #endif
   esp_wifi_set_ps(WIFI_PS_NONE);
   if (!debugMode) {
+    initWifi();
     initOTA();
     client.setServer(MQTT_BROKER, MQTTport);
     client.setCallback(callback);
@@ -170,6 +171,7 @@ void loop() {
   client.loop();                                          // TODO: dont do this in debugMode?
   if (!debugMode) {
     if (WiFi.waitForConnectResult() != WL_CONNECTED) {    // TODO: better solution? problem: ESP loses the current state if the connection is lost!
+      initWifi();
       initOTA();
     }
     ArduinoOTA.handle();

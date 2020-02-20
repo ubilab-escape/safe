@@ -37,6 +37,7 @@ StaticJsonDocument<300> mqtt_decoder;
 #define HIGHER_THRESHOLD 700
 #define AMOUNT_CORRECT_MEAS 5
 #define WIFI_TIMEOUT_MS 3000
+
 typedef enum
 {
   STATE_INACTIVE = 0,
@@ -69,20 +70,21 @@ unsigned int s6_val;
 unsigned int s7_val;
 unsigned int s8_val;
 unsigned int adc_correct_value;
+
 void setup() {
-switch_status = SWITCH_NOT_SOLVED;
-voltage_status = VOLT_NOT_SOLVED;
-puzzle_status = STATE_ACTIVE;
-adc_val = 0;
-s1_val = 0;
-s2_val = 0;
-s3_val = 0;
-s4_val = 0;
-s5_val = 0;
-s6_val = 0;
-s7_val = 0;
-s8_val = 0;
-adc_correct_value = 0;
+  switch_status = SWITCH_NOT_SOLVED;
+  voltage_status = VOLT_NOT_SOLVED;
+  puzzle_status = STATE_ACTIVE;
+  adc_val = 0;
+  s1_val = 0;
+  s2_val = 0;
+  s3_val = 0;
+  s4_val = 0;
+  s5_val = 0;
+  s6_val = 0;
+  s7_val = 0;
+  s8_val = 0;
+  adc_correct_value = 0;
   pinMode(A0,INPUT);
   pinMode(S1,INPUT_PULLUP);
   pinMode(S2,INPUT_PULLUP);
@@ -96,13 +98,14 @@ adc_correct_value = 0;
   pinMode(LED_V_SOLVED,OUTPUT); digitalWrite(LED_V_SOLVED, HIGH);
   Serial.begin(9600);
   setup_wifi();
+  initOTA();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
 }
 
 void loop() {
-   Serial.print("Current State:"); Serial.println(puzzle_status); 
-   connect_mqqt();
+  Serial.print("Current State:"); Serial.println(puzzle_status); 
+  connect_mqqt();
   if(puzzle_status == STATE_ACTIVE){  
     voltage_status = check_voltage();
     switch_status = check_switches();
@@ -113,8 +116,9 @@ void loop() {
         client.publish("5/safe/activate", puzzleSolved_message, true);
         puzzle_status = STATE_SOLVED;
       }
+    }
   }
- }
+  ArduinoOTA.handle();
 }
 
 void setup_wifi() {
@@ -144,6 +148,36 @@ void setup_wifi() {
   Serial.println("WiFi connected");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
+}
+
+void initOTA() {
+  ArduinoOTA.setHostname("5/safe_activation");
+  ArduinoOTA
+    .onStart([]() {
+      String type;
+      if (ArduinoOTA.getCommand() == U_FLASH)
+        type = "sketch";
+      else // U_SPIFFS
+        type = "filesystem";
+
+      // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+      Serial.println("Start updating " + type);
+    })
+    .onEnd([]() {
+      Serial.println("\nEnd");
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    })
+    .onError([](ota_error_t error) {
+      Serial.printf("Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+      else if (error == OTA_END_ERROR) Serial.println("End Failed");
+    });
+    ArduinoOTA.begin();
 }
 
 // returns one when sensing the correct voltage
@@ -205,7 +239,7 @@ unsigned int check_switches(){
     digitalWrite(LED_S_SOLVED,LOW);
     return SWITCH_NOT_SOLVED;
   }
-} 
+}
 
 void callback(char* topic, byte* payload, unsigned int length) {
     Serial.print("Received message [");
@@ -241,10 +275,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 void connect_mqqt(){
 	client.loop();
-    while (!client.connected()){
-      Serial.println("no connection");
-      client.connect("SafeActivation");
-      client.subscribe("5/safe/activate");
-    }
-    }
+  while (!client.connected()){
+    Serial.println("no connection");
+    client.connect("SafeActivation");
+    client.subscribe("5/safe/activate");
+  }
 }

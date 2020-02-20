@@ -79,38 +79,48 @@ void initLEDstripe() {
   }
 }
 
-void initOTA() {
+void initWifi() {
   safeStatus = connectingWLAN_state;
   printStatus();
-  ArduinoOTA.setHostname("safe_control");
   Serial.println("Booting");
   WiFi.mode(WIFI_STA);
+  // get ssid and password for wifi connection:
   char ssid[30];
   char wlan_password[30];
   preferences.begin("wifi", false);
   preferences.getString(key_pwd, wlan_password, 30);
   preferences.getString(key_ssid, ssid, 30);
   preferences.end();
+  // connecting with wifi:
   WiFi.begin(ssid, wlan_password);
   int startTimeWifi = millis();
   bool retry = true;
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    // wait for wifi connection
     char key = keypad.getKey();
     if ((key != NO_KEY) and (key == '*' or key == '#')) {
-      Serial.println("set connectWLAN to false");
+      // entering debug mode -> no wifi connection
+      Serial.println("entering debug mode!");
       debugMode = true;
       return;
     }
     if ((startTimeWifi + 3500 < millis()) and retry) {
+      // for some reason the first try to connect to the wifi does not work
+      // -> try again after 3.5 seconds
       WiFi.begin(ssid, wlan_password);
       retry = false;
     }
     if (startTimeWifi + 5000 < millis()) {
+      // failed to connect to wifi within 5 seconds -> restart ESP
       ESP.restart();
     }
   }
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
+}
+
+void initOTA() {
+  ArduinoOTA.setHostname("5/safe_control");
   ArduinoOTA
     .onStart([]() {
       String type;
