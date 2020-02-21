@@ -1,11 +1,13 @@
+/*
+ * 
+ */
+
 void setup_vars(){
   flag_finished = 0;
   led_asc = 0;
   piezo_time_mqtt = 3;
   piezo_time = 0;
-  count_num = 0;
   lastMsg = 0;
-  value = 0;
   safeStatus = noPower_state;
   printStatus();
   countdown = countdownStart;
@@ -17,13 +19,6 @@ void setup_vars(){
   setRgbColor(LED_COLOR_RED, LED_MODE_ON);
   delay(10);
   startTime_PS = millis();
-
-  led_asc = 0;
-  piezo_time_mqtt = 3;
-  piezo_time = 0;
-  count_num = 0;
-  lastMsg = 0;
-  value = 0;
 }
 
 void initPWM() {
@@ -120,6 +115,7 @@ void initWifi() {
 }
 
 void initOTA() {
+  // this function is implementing the 'update over the air' functionality
   ArduinoOTA.setHostname("5/safe_control");
   ArduinoOTA
     .onStart([]() {

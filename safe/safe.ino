@@ -1,8 +1,30 @@
-// the code for the keypad was taken from https://www.adafruit.com/product/3845 (25.11.19)
-// the code for the LCD was taken from https://starthardware.org/lcd/ (4.12.19)
-// the code for the I2C LCD was taken from https://funduino.de/nr-19-i%C2%B2c-display (15.12.19)
-// the code for the OTA update was taken from the examples: File -> Examples -> ArduinoOTA -> BasicOTA
+/*
+ * This code implements the control for a safe inside an escape room which includes:
+ *   - reading the credentials from the EEPROM
+ *   - connecting to wifi
+ *   - using update over the air (OTA) -> code can be changed over wifi
+ *   - implementing MQTT to send and receive messages (using JSON)
+ *   - reading values from a keaypad (keys: 1, ..., 9, *, #)
+ *   - printing messages to a LCD screen (using I2C)
+ *   - reading values from an acceleration sensor using I2C
+ *   - reading values from a switch
+ *   - control a lock
+ *   - control a LED stripe
+ *   - control a speaker
+ *    
+ * The code for the keypad was taken from https://www.adafruit.com/product/3845 (25.11.19)
+ * The code for the LCD was taken from https://starthardware.org/lcd/ (4.12.19)
+ * The code for the I2C LCD was taken from https://funduino.de/nr-19-i%C2%B2c-display (15.12.19)
+ * The code for the OTA update was taken from the examples: File -> Examples -> ArduinoOTA -> BasicOTA
+ * 
+ * All functions used in 'setup' are in the 'init_functions.ino' file.
+ * 
+ * The credentials for the network as well as the password for the safe have to be stored in
+ * the EEPROM. This can be accomplished easily by entering the credentials in 'safe_network.ino'
+ * and uploading the code once to the ESP. 
+ */
 
+ 
 #include "Keypad.h"              // keypad library by Mark Stanley, Alexander Brevig
 #include <LiquidCrystal.h>
 #include <LiquidCrystal_I2C.h>   // I2C library by Frank de Brabander (does result in a warning while compiling but works fine)
@@ -25,6 +47,7 @@
 #define WLAN_enable true
 #define USE_I2C_LCD
 #define countdownStart 6
+#define WRONG_CODE_DISPLAY_TIME 1000  // time in ms while the message "wrong safe code" is shown
 #define reopenDelay    5         // delay in s
 #define NUMPIXELS      32
 #define MIN_BRIGHT_DEACT 30
@@ -49,26 +72,31 @@
 #define LED_PIN 2
 #define BUZZER_PIN 4
 
-const char* MQTT_BROKER = "10.0.0.2";
-Preferences preferences;
-long piezo_time = 0;
-int count_num = 0;
 bool debugMode = !WLAN_enable;
+bool flag_finished = 0;
 
+// Wifi, MQTT:
+Preferences preferences;
 const char* key_ssid = "ssid";
 const char* key_pwd = "pass";
 
-bool flag_finished = 0;
+const char* MQTT_BROKER = "10.0.0.2";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 long lastMsg = 0;
 char msg[50];
-int value = 0;
-// ----------------------------------------------------------------------------------------------
+
+// safe code:
+const char* key_safeCode = "safeCode";
+char safeCode[30];
+int currentTry[30];
+int safeCodeLength;
+
 // keypad:
 const byte ROWS = 4; //four rows
 const byte COLS = 3; //three columns
+
 char keys[ROWS][COLS] = {
   {'1', '2', '3'},
   {'4', '5', '6'},
@@ -78,10 +106,8 @@ char keys[ROWS][COLS] = {
 
 byte rowPins[ROWS] = {12, 33, 25, 27}; //connect to the row pinouts of the keypad
 byte colPins[COLS] = {14, 13, 26}; //connect to the column pinouts of the keypad
+Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
-Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
-
-// ----------------------------------------------------------------------------------------------
 // LCD:
 #ifdef USE_I2C_LCD
   LiquidCrystal_I2C lcd(0x27, 16, 2);  // GPIO 21 = SDA; GPIO 22 = SCL (VCC = 5V)
@@ -90,6 +116,7 @@ Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
   LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 #endif
 
+// LED stripe:
 int led_mode = 0;
 uint32_t delay_led = 0;
 int led_brightness = 60;
@@ -97,22 +124,13 @@ bool led_asc = 0;
 uint8_t piezo_time_mqtt = 3;
 StaticJsonDocument<300> mqtt_decoder;
 NeoPixelBrightnessBus<NeoGrbFeature, Neo800KbpsMethod> pixels(NUMPIXELS, LED_PIN);
-// Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
-
-// ----------------------------------------------------------------------------------------------
-// safe code:
-const char* key_safeCode = "safeCode";
-char safeCode[30];
-int currentTry[30];
-int safeCodeLength;
 // safe status:
 enum safeStatusEnum {start_state, connectingWLAN_state, noPower_state, locked_state, lockedAlarm_state,
                      wrongSafePassword_state, openLock_state, unlocked_state, skippedLocked_state, reopenDelay_state};
 enum safeStatusEnum safeStatus = start_state;
 
 // timer:
-const int messageLength = 1000;  // time while the message "wrong safe code" is shown
 unsigned long startTime, currentTime;
 unsigned long startTime_PS;
 
@@ -124,9 +142,10 @@ const int freq = 3000;
 const int freq2 = 4000;
 const int channel = 0;
 const int resolution = 8;
+long piezo_time = 0;
 
-// Assign a unique ID to this sensor at the same time
-Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(54321);
+// acceleration sensor:
+Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(54321);   // Assign a unique ID to the acceleration sensor
 
 bool disguardACCvalues = false;
 int disguardACCvalues_start;
@@ -410,7 +429,7 @@ void action() {
     case wrongSafePassword_state:
     {
       currentTime = millis();
-      if (currentTime - startTime >= messageLength) {
+      if (currentTime - startTime >= WRONG_CODE_DISPLAY_TIME) {
         lock();
       }
       else if (currentTime < startTime) {

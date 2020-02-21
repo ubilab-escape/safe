@@ -1,4 +1,6 @@
-/* call once to save credentials in flash memory */
+/* 
+ * call once to save credentials in flash memory
+ */
 #include <Preferences.h>
 #include <WiFi.h>
 #include <ESPmDNS.h>
@@ -7,13 +9,13 @@
 
 Preferences preferences;
 const char* key_ssid = "ssid";
-const char* ssid = "...";
+const char* ssid = "...";              // <-------- enter the ssid of your network
 
 const char* key_WifiPassword = "pass";
-const char* wifiPassword = "...";
+const char* wifiPassword = "...";     // <--------- enter the password for your network
 
 const char* key_safeCode = "safeCode";
-const char* safeCode = "...";
+const char* safeCode = "...";         // <---------- enter the safe code you want
 
 
 void setup() {
@@ -29,7 +31,7 @@ void setup() {
   Serial.print(".");
   preferences.end();
   Serial.println(" Done");
-  Serial.println("start update ota");
+  Serial.println("Trying to connect to wifi...");
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, wifiPassword);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -37,6 +39,8 @@ void setup() {
     delay(5000);
     ESP.restart();
   }
+  Serial.println("Initializing update over the air...");
+  ArduinoOTA.setHostname("5/safe_updateCredentials");
   ArduinoOTA
     .onStart([]() {
       String type;
@@ -61,7 +65,7 @@ void setup() {
       else if (error == OTA_END_ERROR) Serial.println("End Failed");
     });
   ArduinoOTA.begin();
-  Serial.println("update ota started");
+  Serial.println("Update ota started.");
 }
 
 void loop() {
