@@ -123,6 +123,7 @@ int led_brightness = 60;
 bool led_asc = 0;
 uint8_t piezo_time_mqtt = 3;
 StaticJsonDocument<300> mqtt_decoder;
+// Use NeoPixelBus because the orignal NeoPixel Library has Problems with ESP32 Interrupts
 NeoPixelBrightnessBus<NeoGrbFeature, Neo800KbpsMethod> pixels(NUMPIXELS, LED_PIN);
 
 // safe status:
@@ -209,6 +210,10 @@ void loop() {
   }
 }
 
+/*
+* Change the LED Brightness. Use for MODE_PULSE and MODE_BLINK
+* This function updates the LED values, should be called periodically.
+*/
 void updateLED() {
   if(led_mode == LED_MODE_PULSE) {
     if(millis() - delay_led > 200){
@@ -230,8 +235,11 @@ void updateLED() {
     }
   } else if (led_mode == LED_MODE_BLINK) {
     if(millis() - delay_led > 500){
+      // handle blinking of the LED
       delay_led = millis();
       if(led_asc){
+        // dont turn the led completly off, it looks better, if it still
+        // on with low brightness
         pixels.SetBrightness(20);
         pixels.Show();
         Serial.println("led blink on");
@@ -249,6 +257,9 @@ void updateLED() {
   }
 }
 
+/*
+* This function sets Mode and Color for the LED stripe
+*/
 void setRgbColor(int RgbColorCode, int setMode){
   HtmlColor col;
   switch(RgbColorCode){
@@ -264,32 +275,34 @@ void setRgbColor(int RgbColorCode, int setMode){
     case LED_COLOR_BLUE: // blue
       col = HtmlColor(RgbColor(0, 0, 255));
     break;
-    case LED_COLOR_ORANGE:
+    case LED_COLOR_ORANGE: // orange
       col = HtmlColor(RgbColor(255, 128, 0));
     break;
   }
+
   for(int i=0;i<NUMPIXELS;i++){
     pixels.SetPixelColor(i, col);
     pixels.Show(); // This sends the updated pixel RgbColor to the hardware.
   }
+
   led_mode = setMode;
   switch(setMode){
-    case 0:
+    case 0: // on
       pixels.SetBrightness(MAX_BRIGHT_DEACT);
       pixels.Show();
     break;
-    case 1:
+    case 1: // all leds off
       col = HtmlColor(RgbColor(0, 0, 0));
         for(int i=0;i<NUMPIXELS;i++){
           pixels.SetPixelColor(i, col);
           pixels.Show(); // This sends the updated pixel RgbColor to the hardware.
         }
     break;
-    case 2:
+    case 2: // fade
       led_brightness = 60;
       delay_led = 0;
     break;
-    case 3:
+    case 3: // blink
       pixels.SetBrightness(MAX_BRIGHT_DEACT);
       pixels.Show();
       delay_led = 0;
@@ -297,15 +310,20 @@ void setRgbColor(int RgbColorCode, int setMode){
   }
 }
 
+/*
+* This function updates the piezo values, should be called periodically.
+*/
 void piezoControl_for_mqtt(void) {
   if(piezo_controlled_by_mqtt) {
     long time_diff = floor((millis() - piezo_time)/100)*100;
+    // change the frequency periodically to get a nice alarm sound.
     if(time_diff % 1000 == 0) {
       ledcWriteTone(channel, freq);
     } else if(time_diff % 500 == 0){
       ledcWriteTone(channel, freq2);
     }
     if(time_diff > piezo_time_mqtt*1000){
+      // time is up, piezo should stop now 
       ledcWrite(channel, 0);
       piezo_controlled_by_mqtt = false;
       Serial.println("piezo end");
@@ -313,6 +331,9 @@ void piezoControl_for_mqtt(void) {
   }
 }
 
+/*
+* Create a Json String like defined by the operator group
+*/
 char* createJson(char* method_s, char* state_s, char* data_s){
   StaticJsonDocument<300> doc;
   doc["method"] = method_s;
@@ -323,6 +344,9 @@ char* createJson(char* method_s, char* state_s, char* data_s){
   return JSON_String;
 }
 
+/*
+* This function handles the mqqt callback
+*/
 void callback(char* topic, byte* payload, unsigned int length) {
     Serial.print("Received message [");
     Serial.print(topic);
@@ -336,21 +360,27 @@ void callback(char* topic, byte* payload, unsigned int length) {
  
     msg[length] = '\0';
     Serial.println(msg);
-    
+    // convert message to Json and extract the values
     deserializeJson(mqtt_decoder, msg);
     const char* method_msg = mqtt_decoder["method"];
     const char* state_msg = mqtt_decoder["state"];
     const char* data_msg = mqtt_decoder["data"];
+    
     if(strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "on") == 0 && data_msg != NULL && (unsigned)strlen(data_msg) >= 1){
-      //change led
+      // change led, trigger on with data is received
+      // the protocol to change colors and piezo is described in the @readme.md file
       if((unsigned)strlen(data_msg) >= 2) {
+        
         int led_col = data_msg[0] - 48;
         int led_st = data_msg[2] - 48;
+        
         if(led_col >= 0 && led_col <= 9 && led_st >= 0 && led_st <= 8) {
+          // set color and mode
           setRgbColor(led_col, led_st);
           Serial.println("led");
           Serial.println(data_msg);
         } else if(led_st == 9) {
+          // start the piezo for led_col seconds
           Serial.println("start piezo");
           ledcWrite(channel, 125);
           ledcWriteTone(channel, freq);
@@ -366,19 +396,25 @@ void callback(char* topic, byte* payload, unsigned int length) {
     } 
 
     if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "on") == 0 && ( data_msg == NULL || (unsigned)strlen(data_msg) == 0)){
+      // trigger on message
+      // the save should go to the active state
       lock();
       setRgbColor(LED_COLOR_ORANGE, LED_MODE_ON);
       printStatus();
       client.publish(thisTopicName, createJson("status", "active", ""), true);
     } 
     if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "off") == 0 && ( data_msg == NULL || (unsigned)strlen(data_msg) == 0)){
+       // trigger of state, the safe should go to the inactive state
        if(digitalRead(SWITCH_PIN) == 0){
+        // reset all variables. The inactive state is the inital state.
         setup_vars();
         client.publish(thisTopicName, createJson("status", "inactive", ""), true);
       } else {
+        // dont go into the inactive state if the safe is still open
         client.publish(thisTopicName, createJson("status", "failed", "safe is still open, can't reset"), true);
       }
     } else if(strcmp(topic, "5/safe/control") == 0 && strcmp(method_msg, "trigger") == 0 && strcmp(state_msg, "off") == 0 && strcmp(data_msg, "skipped") == 0){
+      // message skipped, safe should open and remain in openLock state if not opened
       safeStatus = openLock_state;
       setRgbColor(LED_COLOR_GREEN, LED_MODE_BLINK); //green lock
       countdown = countdownStart;
@@ -388,6 +424,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
     }
 }
 
+/*
+* This function handles the main state machine of the save
+*/
 void action() {
   switch (safeStatus) {
     case noPower_state:
@@ -663,6 +702,11 @@ void printCountdown() {
   }
 }
 
+/*
+* This function checks the acceleration sensor, it should be called periodically.
+* If the acceleration is higher than a Threshold, the alarm sound should be played
+* and the led-strip should blink red for a few seconds.
+*/
 void checkPiezo() {
   /* Get a new sensor event */
   sensors_event_t event;
