@@ -86,6 +86,10 @@ examples:
 
 ![Safe Activate Flow Chart](Pics/SafeActivateFlowChart.png)
 
+# Safe Control
+
+![Safe Control State Machine](Pics/safe_control_sm.png)
+
 ## Instructions for the Escape Room Operator
 
 # Room Reset:
