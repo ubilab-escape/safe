@@ -31,7 +31,7 @@ Banana Socket|10|1,84|18,4|[Octopart](https://octopart.com/bu-00233-0-mueller-82
 Piezo Buzzer|5|1,03|5,15|[Octopart](https://octopart.com/mckpt-g1711a3-05-3691-multicomp-12157125?r=sp&s=TdKAcML0QkSYqrwuZLE5lQ)
 Switch|8|2,17|17,36|[Octopart](https://octopart.com/100sp1t1b4m2qe-e-switch-1058620?r=sp&s=26ppMzJ4SaadG3iCrhg9HA)
 N-MOS|10|0,7|7|[Octopart](https://octopart.com/irf510pbf-vishay-46532502?r=sp&s=Ft8oBWb7Tw--a\_FmfUap9w#)
-Switches|2|1,81|3,62|https://octopart.com/db1c-b1lb-zf-71118816?r=sp&s=sDTxIuqxSJOc-Uf9S2HFEg)
+Switches|2|1,81|3,62|[Octopart](https://octopart.com/db1c-b1lb-zf-71118816?r=sp&s=sDTxIuqxSJOc-Uf9S2HFEg)
 
 Total: 128,29 €
 
