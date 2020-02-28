@@ -20,10 +20,6 @@ This action will change the light color of the safes LED to orange and activate 
 * Riddle with numpad input
 		
 
-## toDO
-- [ ] Safe Decoration
-
-
 ## Partlist
 
 **part**|**count**|**price/part in €**|**price total**|**link**
