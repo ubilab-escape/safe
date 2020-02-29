@@ -83,6 +83,7 @@ examples:
 ### Safe Activate
 
 ![Safe Activate Flow Chart](Pics/SafeActivateFlowChart.png)
+
 **Image 3**: Flow Chart of the safe activation
 
 ### Safe Control
