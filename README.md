@@ -24,16 +24,16 @@ This action will change the light color of the safes LED to orange and activate 
 
 **part**|**count**|**price/part in €**|**price total**|**link**
 :-----:|:-----:|:-----:|:-----:|:-----:
-Keypad|1|5,8|5,8|[Octopart](https://octopart.com/3845-adafruit+industries-94636475?r=sp&s=QRIaZTRmSZu4F2mVarnONA)
-Solenoid Lock|1|13,35|13,35|[Octopart](https://octopart.com/1512-adafruit+industries-51880349?r=sp&s=Jx9Gw6qzSH2-PR3HbMgn8w)
-Banana Plug|20|2,06|41,2|[Octopart](https://octopart.com/1325-2-pomona+electronics-55397240?r=sp&s=kmyIgsMeQOCZjpt9e\_rAXw)
-Banana Socket|10|1,84|18,4|[Octopart](https://octopart.com/bu-00233-0-mueller-824050?r=sp&s=FBVoi6XFSGGoTvQtIDogQw)
-Piezo Buzzer|5|1,03|5,15|[Octopart](https://octopart.com/mckpt-g1711a3-05-3691-multicomp-12157125?r=sp&s=TdKAcML0QkSYqrwuZLE5lQ)
-Switch|8|2,17|17,36|[Octopart](https://octopart.com/100sp1t1b4m2qe-e-switch-1058620?r=sp&s=26ppMzJ4SaadG3iCrhg9HA)
-N-MOS|10|0,7|7|[Octopart](https://octopart.com/irf510pbf-vishay-46532502?r=sp&s=Ft8oBWb7Tw--a\_FmfUap9w#)
-Switches|2|1,81|3,62|[Octopart](https://octopart.com/db1c-b1lb-zf-71118816?r=sp&s=sDTxIuqxSJOc-Uf9S2HFEg)
-
-Total: 128,29 €
+Keypad|1|5.8|5.8|[Octopart](https://octopart.com/3845-adafruit+industries-94636475?r=sp&s=QRIaZTRmSZu4F2mVarnONA)
+Solenoid Lock|1|13.35|13.35|[Octopart](https://octopart.com/1512-adafruit+industries-51880349?r=sp&s=Jx9Gw6qzSH2-PR3HbMgn8w)
+Banana Plug|10|2.06|20.6|[Octopart](https://octopart.com/1325-2-pomona+electronics-55397240?r=sp&s=kmyIgsMeQOCZjpt9e\_rAXw)
+Banana Socket|10|1.84|18.4|[Octopart](https://octopart.com/bu-00233-0-mueller-824050?r=sp&s=FBVoi6XFSGGoTvQtIDogQw)
+Piezo Buzzer|5|1.03|5.15|[Octopart](https://octopart.com/mckpt-g1711a3-05-3691-multicomp-12157125?r=sp&s=TdKAcML0QkSYqrwuZLE5lQ)
+Switch|8|2.17|17.36|[Octopart](https://octopart.com/100sp1t1b4m2qe-e-switch-1058620?r=sp&s=26ppMzJ4SaadG3iCrhg9HA)
+N-MOS|10|0.7|7|[Octopart](https://octopart.com/irf510pbf-vishay-46532502?r=sp&s=Ft8oBWb7Tw--a\_FmfUap9w#)
+Limit switches|2|1.81|3.62|[Octopart](https://octopart.com/db1c-b1lb-zf-71118816?r=sp&s=sDTxIuqxSJOc-Uf9S2HFEg)
+Wooden chest|1|18|18|[Obi](https://www.obi.de/aufbewahrungsboxen/laublust-holzkiste-deckel-und-griffe-natur-kiefer-40-cm-x-30-cm-x-24-cm-fsc-/p/4480497?wt_mc=gs.pla_css.Wohnen.Haushalt.AufbewahrungOrdnung&wt_cc1=2032213149&wt_cc4=c&wt_cc9=72234010499&gclid=Cj0KCQiAtOjyBRC0ARIsAIpJyGOc110gyAUM7jzfQY2w4vCwtppWHI9Yl8gK_ffBL1Zt-crWl_SSy10aAtSsEALw_wcB)
+Total: 109.28 €
 
 ## Group
 
