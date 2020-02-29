@@ -70,29 +70,29 @@ examples:
 
 ## Schematics
 
-# Safe Activate
+### Safe Activate
 ![Safe Activate Schematic](Pics/SchematicActivate.png)
-Image 1: Schematic of the activation.
+**Image 1**: Schematic of the activation.
 
-# Safe Control
+### Safe Control
 ![Safe Control Schematic](Pics/SchematicControl.png)
-Image 2: Schematic of the safe.
+**Image 2**: Schematic of the safe.
 
 ## Flow Charts
 
-# Safe Activate
+### Safe Activate
 
 ![Safe Activate Flow Chart](Pics/SafeActivateFlowChart.png)
-Image 3: Flow Chart of the safe activation
+**Image 3**: Flow Chart of the safe activation
 
-# Safe Control
+### Safe Control
 
 ![Safe Control State Machine](Pics/safe_control_sm.png)
-Image 4: State machine of the safe control with the main states
+**Image 4**: State machine of the safe control with the main states
 
 ## Instructions for the Escape Room Operator
 
-# Room Reset:
+### Room Reset:
 * Close the safe 
 * Pull out the resistors and place them in front of the puzzle
 * Put the safe datasheet (back) on the table
@@ -100,10 +100,10 @@ Image 4: State machine of the safe control with the main states
 # Pictures
 
 ![Safe and activation picture](Pics/safe_and_activation.jpeg)
-Image 5: Picture of the safe (left) and the activatioin puzzle (right).
+**Image 5**: Picture of the safe (left) and the activatioin puzzle (right).
 
-![Safe with floppy discs](Pics/safe_with_floppy_discs.jpeg.jpeg)
-Image 6: Picture of the Safe with green LED color and floppy discs inside.
+![Safe with floppy discs](Pics/safe_with_floppy_discs.jpeg)
+**Image 6**: Picture of the Safe with green LED color and floppy discs inside.
 
 ![lock with switch](Pics/lock.jpeg)
-Image 7: Picture of the lock with switch to detect wether the safe is opened or closed.
+**Image 7**: Picture of the lock with switch to detect whether the safe is opened or closed.
